@@ -42,7 +42,7 @@ if __name__ == '__main__':
     # initialize parameters for training
     train_params = {
         'agent': None,
-        'worker_num': 4,
+        'worker_num': 3,
         'memory_size': 50000,
         'batch_size': 128,
         'epochs': 50000,
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     agent_params['agent_model'] = copy.deepcopy(agent)
 
     # create the remote parameter server
-    remote_param_server = ray.remote(ParamServer).remote(agent.behavior_policy_net.state_dict())
+    remote_param_server = ray.remote(ParamServer).remote(agent.behavior_policy_net.state_dict(), train_params['epochs'])
 
     # create the remote learner server
     train_params['agent'] = copy.deepcopy(agent)
@@ -115,5 +115,6 @@ if __name__ == '__main__':
             # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
         pbar.update()
+
     np.save("./parallel_returns.npy", test_returns)
     ray.wait(processes_running)
