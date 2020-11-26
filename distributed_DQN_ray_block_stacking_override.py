@@ -10,7 +10,6 @@ from agent.block_stacking.dqn_wrapper import DQNBlock
 from network.models import ResUCatShared
 from env.block_stacking.env_wrapper import BlockStackingEnv
 from utils.ExperienceReplay import ReplayBuffer
-# from distributed_DQN_ray import Actor, Learner, MemoryServer, ParamServer
 from distributed.actor import Actor
 from distributed.learner import Learner
 from distributed.memory_server import MemoryServer
@@ -49,11 +48,31 @@ class BlockStackingParamServer(ParamServer):
 
 @ray.remote(num_gpus=0.25)
 class BlockStackingLearner(Learner):
-    pass
+    def eval_policy(self, episode):
+        old_eps = self.agent.eps
+        returns = []
+        self.agent.eps = 0
+        for _ in range(episode):
+            G = 0
+            rewards = []
+            obs = self.test_env.reset()
+            for _ in range(self.env_params['max_episode_time_steps']):
+                action = self.agent.get_action(obs)
+                next_obs, reward, done, _ = self.test_env.step(action)
+                rewards.append(reward.item())
+                if done.item():
+                    for r in reversed(rewards):
+                        G = r + self.agent.gamma * G
+                    break
+                else:
+                    obs = next_obs
+            returns.append(G)
 
-ray.init(num_gpus=2)  # init the ray
+        self.agent.eps = old_eps
+        return returns
 
 if __name__ == '__main__':
+    ray.init(num_gpus=2)  # init the ray
     workspace = np.asarray([[0.35, 0.65],
                             [-0.15, 0.15],
                             [0, 0.50]])
@@ -64,7 +83,7 @@ if __name__ == '__main__':
     # init the params
     env_config = {'simulator': 'pybullet', 'env': 'block_stacking', 'workspace': workspace, 'max_steps': 10,
                   'obs_size': heightmap_size, 'fast_mode': True, 'action_sequence': 'xyp', 'render': False,
-                  'num_objects': 4, 'random_orientation': False, 'reward_type': 'sparse', 'simulate_grasp': True,
+                  'num_objects': 3, 'random_orientation': False, 'reward_type': 'sparse', 'simulate_grasp': True,
                   'robot': 'kuka', 'workspace_check': 'point', 'in_hand_mode': 'raw', 'heightmap_resolution': heightmap_resolution}
 
     def env_fn():
@@ -133,8 +152,8 @@ if __name__ == '__main__':
     pbar = tqdm.trange(train_params['epochs'])
     G = 0
     t0 = time.time()
-    # testing_freq = 2*60
-    testing_freq = 10
+    testing_freq = 2*60
+    # testing_freq = 10
     for t in range(train_params['epochs']):
         # sample a batch data
         loss = ray.get(remote_learner.update.remote())
@@ -147,8 +166,8 @@ if __name__ == '__main__':
             ray.get(remote_learner.update_target.remote())
 
         if time.time() - t0 > (len(test_returns) + 1) * testing_freq:
-        # if not np.mod(t, 200):
-            G = np.average(ray.get(remote_learner.eval_policy.remote(10)))
+            # if not np.mod(t, 200):
+            G = np.mean(ray.get(remote_learner.eval_policy.remote(20)))
             test_returns.append(G)
 
         # print information
