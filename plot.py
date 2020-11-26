@@ -3,7 +3,6 @@ import numpy as np
 
 
 def rolling_smooth(data, window_size, mode='mean'):
-    # rolling/moving average (specifically, this is a trailing average. i.e. the mean of (s_t) = mean(s_t-n, ..., s_t-1, s_t)
     # ok for simple moving average (SMA)
     assert data.ndim == 1
     # generate a kernel e.g. size 3 kernel = [1., 1., 1.]
@@ -79,7 +78,7 @@ def load_data(root_path, file_names):
 
 if __name__ == '__main__':
     root_dir = './'
-    file_names = ['returns.npy', 'w3_returns.npy'
+    file_names = ['w1_returns.npy', 'w2_returns.npy'
                   ]
 
     data_list = load_data(root_dir, file_names)
@@ -91,11 +90,11 @@ if __name__ == '__main__':
         'y_label': 'discounted return',
         'font_size': 20,
         'title': 'vanilla and double DQN: CartPole-v0',
-        'color': ['tab:purple', 'tab:orange'],
-        'legend': ['1-worker', '3-workers'],
+        'color': ['tab:purple', 'tab:orange', 'tab:green'],
+        'legend': ['1-worker', '2-workers', '4-workers'],
         'legend_pos': 'lower right'
     }
 
-    win_size = 100
+    win_size = 50
 
     plot_compared_learning_curve(data_list, win_size, plot_configs)

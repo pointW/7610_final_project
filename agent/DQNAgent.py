@@ -1,4 +1,5 @@
 import torch
+import gym
 import numpy as np
 from torch import nn
 from model.DeepNetworks import DeepQNet
@@ -141,3 +142,37 @@ class DQNAgent(object):
         batch_data_tensor['done'] = torch.tensor(done_arr, dtype=torch.float32).view(-1, 1).to(self.device)
 
         return batch_data_tensor
+
+    def eval_policy(self, env_params):
+        # create environment
+        env_test = gym.make(env_params['env_name'])
+        # set running statistics
+        old_eps = self.eps
+        run_num = env_params['run_eval_num']
+        returns = []
+
+        self.eps = 0
+        for r in range(run_num):
+            # reset domain
+            obs, rewards = env_test.reset(), []
+            # one rollout
+            for t in range(env_params['max_episode_time_steps']):
+                # get greedy policy
+                action = self.get_action(obs)
+                # interaction
+                next_obs, reward, done, _ = env_test.step(action)
+                # save rewards
+                rewards.append(reward)
+                # check termination
+                if done:
+                    G = 0
+                    for r in reversed(rewards):
+                        G = r + 0.9995 * G
+                    returns.append(G)
+                    break
+                else:
+                    obs = next_obs
+
+        # reset the epsilon
+        self.eps = old_eps
+        return np.mean(returns)
