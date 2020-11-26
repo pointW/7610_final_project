@@ -3,8 +3,9 @@ from helping_hands_rl_envs import env_factory
 
 
 class BlockStackingEnv:
-    def __init__(self, config):
-        self.env = env_factory.createEnvs(1, 'rl', config['simulator'], config['env'], config, {'random_orientation':False})
+    def __init__(self, config, num_envs=1, render=False):
+        config['render'] = render
+        self.env = env_factory.createEnvs(num_envs, 'rl', config['simulator'], config['env'], config, {'random_orientation':False})
         self.heightmap_resolution = config['heightmap_resolution']
         self.workspace = config['workspace']
 

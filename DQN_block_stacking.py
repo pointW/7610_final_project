@@ -201,7 +201,7 @@ class Learner(object):
         self.agent.update_target_policy()
 
     def eval_policy(self):
-        return eval_policy(self.test_env, self.agent, 20, 10)
+        return eval_policy(self.test_env, self.agent, 10, 10)
 
     # def run(self):
     #     # check if the memory server contains enough data
@@ -253,7 +253,7 @@ if __name__ == '__main__':
     # init the params
     env_config = {'simulator': 'pybullet', 'env': 'block_stacking', 'workspace': workspace, 'max_steps': 10,
                   'obs_size': heightmap_size, 'fast_mode': True, 'action_sequence': 'xyp', 'render': False,
-                  'num_objects': 4, 'random_orientation': False, 'reward_type': 'sparse', 'simulate_grasp': True,
+                  'num_objects': 3, 'random_orientation': False, 'reward_type': 'sparse', 'simulate_grasp': True,
                   'robot': 'kuka', 'workspace_check': 'point', 'in_hand_mode': 'raw', 'heightmap_resolution': heightmap_resolution}
 
     env_params = {
@@ -295,35 +295,32 @@ if __name__ == '__main__':
     # create the remote learner server
     remote_learner = Learner.remote(train_params, env_params, remote_param_server, remote_memory_server)
 
-    # create the actors
-    actor_num = 5
-    actors = []
-    for i in range(actor_num):
-        agent_params['agent_id'] = i
-        agent_params['agent_model'] = DQNBlock(workspace, heightmap_resolution, agent_params['device'], agent_params['lr'], agent_params['gamma'])
-        actors.append(Actor.remote(agent_params, env_params, remote_param_server, remote_memory_server))
-
-    processes = []
-    for actor in actors:
-        processes.append(actor)
-
-    processes_running = [p.run.remote() for p in processes]
+    # create the actor
+    agent_params['agent_id'] = 0
+    agent_params['agent_model'] = DQNBlock(workspace, heightmap_resolution, agent_params['device'], agent_params['lr'], agent_params['gamma'])
+    actor = Actor.remote(agent_params, env_params, remote_param_server, remote_memory_server)
 
     test_returns = []
     losses = []
-    while ray.get(remote_memory_server.get_size.remote()) < train_params['start_train_step']:
-        continue
 
     # start training
     pbar = tqdm.trange(train_params['total_time_steps'])
     G = 0
     t0 = time.time()
     testing_freq = 2*60
-    for t in range(train_params['total_time_steps']):
+    t = 0
+    while t < train_params['total_time_steps']:
+        ray.get(actor.send_transition_to_memory_server.remote())
+        ray.get(actor.update_behavior_policy.remote())
+        ray.get(actor.single_rollout.remote())
+        if ray.get(remote_memory_server.get_size.remote()) < train_params['start_train_step']:
+            continue
         # sample a batch data
-        loss = ray.get(remote_learner.update.remote())
-        losses.append(loss)
-        ray.get(remote_learner.sync_param_server.remote())
+        for _ in range(10):
+            loss = ray.get(remote_learner.update.remote())
+            losses.append(loss)
+            ray.get(remote_learner.sync_param_server.remote())
+            t += 1
 
         # update the target policy
         if not np.mod(t, train_params['update_target_freq']):
@@ -331,25 +328,17 @@ if __name__ == '__main__':
             ray.get(remote_learner.update_target.remote())
 
         if time.time() - t0 > (len(test_returns) + 1) * testing_freq:
-        # if not np.mod(t, 200):
             G = ray.get(remote_learner.eval_policy.remote())
             test_returns.append(G)
 
         # print information
         pbar.set_description(
             f'Step: {t} |'
-            f'Loss: {np.mean(losses[-10:]) if losses else 0:.4f} |'
-            f'G: {np.mean(test_returns[-5:]) if test_returns else 0:.2f} | '
+            f'Loss: {np.mean(losses[-100:]) if losses else 0:.4f} |'
+            f'G: {np.mean(test_returns[-100:]) if test_returns else 0:.2f} | '
             # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
-        pbar.update()
-    np.save("./parallel_returns.npy", test_returns)
+        pbar.update(t - pbar.n)
+    np.save("./single_returns.npy", test_returns)
 
-    ray.wait(processes_running)
-
-    # processes = []
-    # for actor in actors:
-    #     processes.append(actor)
-    # processes_running = [p.run.remote() for p in processes]
-    # ray.wait(processes_running)
 
