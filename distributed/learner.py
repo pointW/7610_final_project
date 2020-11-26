@@ -44,7 +44,7 @@ class Learner(object):
             for t in range(self.env_params['max_episode_time_steps']):
                 action = self.agent.get_action(obs)
                 next_obs, reward, done, _ = self.test_env.step(action)
-                rewards.append(reward) 
+                rewards.append(reward)
                 if done:
                     break
                 else:
