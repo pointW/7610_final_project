@@ -113,6 +113,9 @@ class ParamServer(object):
     def get_scheduled_eps(self):  # return the latest epsilon
         return self.eps
 
+    def get_train_step(self):
+        return self.train_step
+
 
 @ray.remote
 class Learner(object):
@@ -150,6 +153,7 @@ class Learner(object):
         # start training
         pbar = tqdm.trange(self.epochs)
         for ep in pbar:
+
             # sample a batch data
             batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size))
 
