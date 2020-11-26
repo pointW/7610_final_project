@@ -9,7 +9,7 @@ from utils.ExperienceReplay import ReplayBuffer
 from utils.Schedule import LinearSchedule
 
 
-@ray.remote
+# @ray.remote
 class Actor(object):
     def __init__(self, agent_configs, env_configs, param_server_remote, memory_server_remote):
         # store the IDs
@@ -27,7 +27,7 @@ class Actor(object):
         self.buffer_size = env_configs['max_episode_time_steps']
 
         # environment parameters
-        self.env = gym.make(env_configs['env_name'])
+        self.env = env_configs['env_fn']()
         self.episode_time_steps = env_configs['max_episode_time_steps']
 
         # running indicators
@@ -79,7 +79,7 @@ class Actor(object):
                 obs = next_obs
 
 
-@ray.remote
+# @ray.remote
 class MemoryServer(object):
     def __init__(self, size):
         self.size = size  # size of the memory
@@ -97,7 +97,7 @@ class MemoryServer(object):
         return self.storage.sample_batch(batch_size)
 
 
-@ray.remote
+# @ray.remote
 class ParamServer(object):
     def __init__(self, model_state_dict):
         self.model_state_dict = model_state_dict  # parameters of the model
@@ -114,9 +114,9 @@ class ParamServer(object):
         return self.eps
 
 
-@ray.remote
+# @ray.remote
 class Learner(object):
-    def __init__(self, learn_params, param_server_remote, memory_server_remote):
+    def __init__(self, learn_params, env_params, param_server_remote, memory_server_remote):
         # remote servers
         self.remote_memory_server = memory_server_remote
         self.remote_param_server = param_server_remote
@@ -127,13 +127,17 @@ class Learner(object):
         self.agent = learn_params['agent']  # model of the agent
         self.batch_size = learn_params['batch_size']  # batch size
         self.start_train_memory_size = learn_params['start_train_memory_size']  # minimal memory size
-        self.update_target_freq = learn_params['update_target_freq']  # target network update frequency
-        self.update_policy_freq = learn_params['update_policy_freq']  # policy network update frequency
-        self.eval_policy_freq = learn_params['eval_policy_freq']  # evaluate policy frequency
 
         # schedule
         self.scheduled_eps = 1
         self.schedule = LinearSchedule(1, 0.01, self.epochs / 2)
+
+        # testing env
+        self.env_params = env_params
+        self.test_env = env_params['env_fn']()
+
+        # current training step
+        self.step = 0
 
         # save results
         self.returns = []
@@ -142,48 +146,84 @@ class Learner(object):
         self.remote_param_server.sync_learner_model_params.remote(self.agent.behavior_policy_net.state_dict(),
                                                                   self.scheduled_eps)
 
-    def run(self):
-        # check if the memory server contains enough data
-        while ray.get(self.remote_memory_server.get_size.remote()) < self.start_train_memory_size:
-            continue
+    def eval_policy(self, episode):
+        old_eps = self.agent.eps
+        returns = []
+        self.agent.eps = 0
+        for _ in range(episode):
+            G = 0
+            rewards = []
+            obs = self.test_env.reset()
+            for _ in range(self.env_params['max_episode_time_steps']):
+                action = self.agent.get_action(obs)
+                next_obs, reward, done, _ = self.test_env.step(action)
+                rewards.append(reward.item())
+                if done.item():
+                    for r in reversed(rewards):
+                        G = r + self.agent.gamma * G
+                    break
+                else:
+                    obs = next_obs
+            returns.append(G)
 
-        # start training
-        pbar = tqdm.trange(self.epochs)
-        for ep in pbar:
-            # sample a batch data
-            batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size))
+        self.agent.eps = old_eps
+        return returns
 
-            # update policy network
-            if not np.mod(ep, self.update_policy_freq):
-                # compute the epsilon
-                self.scheduled_eps = self.schedule.get_value(ep)
-                # update the behavior policy
-                self.agent.update_behavior_policy(batch_data)
-                # send to the parameter server
-                self.sync_param_server()
+    def update(self):
+        self.step += 1
+        batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size))
+        # compute the epsilon
+        self.scheduled_eps = self.schedule.get_value(self.step)
+        # update the behavior policy
+        loss = self.agent.update_behavior_policy(batch_data)
+        # send to the parameter server
+        self.sync_param_server()
+        return loss
 
-            # update the target policy
-            if not np.mod(ep, self.update_target_freq):
-                # update the target network
-                self.agent.update_target_policy()
+    def update_target(self):
+        self.agent.update_target_policy()
 
-            if not np.mod(ep, self.eval_policy_freq):
-                G = self.agent.eval_policy(env_params)
-                self.returns.append(G)
-                # print information
-                pbar.set_description(
-                    f'Epoch: {ep} |'
-                    f'G: {G:.2f} | '
-                    f'Eps: {self.scheduled_eps:.3f} | '
-                    f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
-                )
-
-        np.save(f'./w{self.worker_num}_returns.npy', self.returns)
-
-
-ray.init()  # init the ray
+    # def run(self):
+    #     # check if the memory server contains enough data
+    #     while ray.get(self.remote_memory_server.get_size.remote()) < self.start_train_memory_size:
+    #         continue
+    #
+    #     # start training
+    #     pbar = tqdm.trange(self.epochs)
+    #     for ep in pbar:
+    #         # sample a batch data
+    #         batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size))
+    #
+    #         # update policy network
+    #         if not np.mod(ep, self.update_policy_freq):
+    #             # compute the epsilon
+    #             self.scheduled_eps = self.schedule.get_value(ep)
+    #             # update the behavior policy
+    #             self.agent.update_behavior_policy(batch_data)
+    #             # send to the parameter server
+    #             self.sync_param_server()
+    #
+    #         # update the target policy
+    #         if not np.mod(ep, self.update_target_freq):
+    #             # update the target network
+    #             self.agent.update_target_policy()
+    #
+    #         if not np.mod(ep, self.eval_policy_freq):
+    #             G = self.agent.eval_policy(env_params)
+    #             self.returns.append(G)
+    #             # print information
+    #             pbar.set_description(
+    #                 f'Epoch: {ep} |'
+    #                 f'G: {G:.2f} | '
+    #                 f'Eps: {self.scheduled_eps:.3f} | '
+    #                 f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
+    #             )
+    #
+    #     np.save(f'./w{self.worker_num}_returns.npy', self.returns)
 
 if __name__ == '__main__':
+    ray.init()  # init the ray
+
     total_time_steps = 100000
 
     # init the params
@@ -221,6 +261,10 @@ if __name__ == '__main__':
         'eval_policy_freq': 100,
         'start_train_memory_size': 1000
     }
+
+    def env_fn():
+        return gym.make(env_params['env_name'])
+    env_params['env_fn'] = env_fn
 
     # create the remote memory server
     remote_memory_server = MemoryServer.remote(train_params['memory_size'])

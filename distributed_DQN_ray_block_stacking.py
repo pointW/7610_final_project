@@ -45,15 +45,16 @@ def eval_policy(env, policy, episode, max_episode_time_steps, gamma=0.9):
 class Actor(object):
     def __init__(self, agent_params, env_params, remote_param_server, remote_memory_server):
         # store the IDs
-        os.environ["MKL_NUM_THREADS"] = "1"
         self.id = agent_params['agent_id']
         self.agent = agent_params['agent_model']
+
+        # init remote servers
         self.remote_param_server = remote_param_server
         self.remote_memory_server = remote_memory_server
 
         # local experience replay buffer
         self.local_buffer = []
-        self.buffer_size = 32
+        self.buffer_size = env_params['max_episode_time_steps']
 
         # environment parameters
         self.env = BlockStackingEnv(env_params['env_config'])
@@ -72,54 +73,43 @@ class Actor(object):
         self.agent.behavior_policy_net.eval()
         self.current_step = ray.get(self.remote_param_server.get_step_params.remote())
 
-    def send_transition_to_memory_server(self):
+    def send_data(self):
+        # send the data to the memory server
         self.remote_memory_server.add.remote(self.local_buffer)
+        # clear the local memory buffer
         self.local_buffer = []
 
-    def single_rollout(self):
-        # reset the domain
-        obs = self.env.reset()
-        rewards = []
-        # perform one rollout
-        for t in range(self.episode_time_steps):
-            # get one action
-            self.agent.eps = self.schedule.get_value(self.current_step)
+    def run(self):
+        # synchronize the parameters
+        self.update_behavior_policy()
+        # initialize the environment
+        obs, rewards = self.env.reset(), []
+        # start data collection
+        while True:
+            # compute the epsilon
+            self.agent.eps = self.scheduled_eps
+            # get the action
             action = self.agent.get_action(obs)
-            # perform one step
+            # interaction with the environment
             next_obs, reward, done, _ = self.env.step(action)
-
-            # save transitions
-            self.local_buffer.append((obs, action, reward, next_obs, done))
+            # record rewards
             rewards.append(reward)
-
-            if len(self.local_buffer) > self.buffer_size:
-                # pass the transitions to buffer server
-                self.send_transition_to_memory_server()
-
+            # add the local buffer
+            self.local_buffer.append((obs, action, reward, next_obs, done))
+            # check termination
             if done:
-                break
+                # G = 0
+                # for r in reversed(rewards):
+                #     G = r + 0.9995 * G
+                # print(f"Actor {self.id}: G = {G}, Eps = {self.scheduled_eps}")
+                # reset environment
+                obs, rewards = self.env.reset(), []
+                # synchronize the behavior policy
+                self.update_behavior_policy()
+                # send data to remote memory buffer
+                self.send_data()
             else:
                 obs = next_obs
-        return rewards
-
-    def run(self):
-        # keep collecting data until total time steps used up
-        episode_count = 0
-        # pbar = tqdm.tqdm(total=self.total_time_steps)
-        while self.current_step < self.total_time_steps:
-            prev_step = self.current_step
-            # perform rollouts
-            # if not np.mod(episode_count, 10):
-            self.send_transition_to_memory_server()
-            self.update_behavior_policy()
-
-            episode_rewards = self.single_rollout()
-            self.rewards.append(np.sum(episode_rewards))
-            episode_count += 1
-            starting = max(0, len(self.rewards) - 1 - 1000)
-            avg = np.sum(self.rewards[starting:]) / 1000
-            # pbar.set_description('episode: {}, running reward: {}'.format(episode_count, avg))
-            # pbar.update(self.current_step - prev_step)
 
 
 @ray.remote
@@ -202,42 +192,6 @@ class Learner(object):
 
     def eval_policy(self):
         return eval_policy(self.test_env, self.agent, 20, 10)
-
-    # def run(self):
-    #     # check if the memory server contains enough data
-    #     while ray.get(self.remote_memory_server.get_size.remote()) < self.start_train_step:
-    #         continue
-    #
-    #     # start training
-    #     pbar = tqdm.trange(self.total_time_steps)
-    #     for t in range(self.total_time_steps):
-    #         # increase the steps
-    #         self.step = t
-    #
-    #         # update the behavior policy
-    #         if not np.mod(self.step, self.update_policy_freq):
-    #             # sample a batch data
-    #             batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size))
-    #             self.agent.update_behavior_policy(batch_data)
-    #             self.sync_param_server()
-    #
-    #         # update the target policy
-    #         if not np.mod(self.step, self.update_target_freq):
-    #             # update the target network
-    #             self.agent.update_target_policy()
-    #
-    #         if not np.mod(self.step, 200):
-    #             G = eval_policy(env_params, self.agent)
-    #             self.returns.append(G)
-    #             self.steps.append(t)
-    #
-    #         # print information
-    #         pbar.set_description(
-    #                 f'Step: {self.step} |'
-    #                 f'G: {G:.2f} | '
-    #                 f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
-    #         )
-    #     np.save("./w3_returns.npy", self.returns)
 
 
 ray.init(num_gpus=2)  # init the ray

@@ -19,7 +19,8 @@ class DQNBlock(DQN2D):
         return action_idx
 
     def update_behavior_policy(self, batch):
-        return self.update(batch)
+        loss, td_error = self.update(batch)
+        return loss
 
     def update_target_policy(self):
         self.updateTarget()
