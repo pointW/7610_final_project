@@ -6,8 +6,6 @@ import copy
 import time
 
 from agent.DQNAgent import DQNAgent
-from utils.ExperienceReplay import ReplayBuffer
-from utils.Schedule import LinearSchedule
 
 from distributed.actor import Actor
 from distributed.learner import Learner
@@ -44,7 +42,7 @@ if __name__ == '__main__':
     # initialize parameters for training
     train_params = {
         'agent': None,
-        'worker_num': 1,
+        'worker_num': 4,
         'memory_size': 50000,
         'batch_size': 128,
         'epochs': 50000,
@@ -107,7 +105,6 @@ if __name__ == '__main__':
             ray.get(remote_learner.update_target.remote())
 
         if time.time() - t0 > (len(test_returns) + 1) * testing_freq:
-            # if not np.mod(t, 200):
             G = np.average(ray.get(remote_learner.eval_policy.remote(10)))
             test_returns.append(G)
 
