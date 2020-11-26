@@ -39,6 +39,7 @@ class DQNAgent(object):
         # create behavior policy and target networks
         self.dqn_mode = agent_params['dqn_mode']
         self.use_obs = agent_params['use_obs']
+        self.gamma = agent_params['gamma']
         self.behavior_policy_net = DeepQNet(self.obs_dim, self.action_dim)
         self.target_policy_net = DeepQNet(self.obs_dim, self.action_dim)
 

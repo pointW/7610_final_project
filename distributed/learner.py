@@ -1,4 +1,5 @@
 import ray
+import numpy as np
 from utils.Schedule import LinearSchedule
 
 
@@ -38,19 +39,21 @@ class Learner(object):
         returns = []
         self.agent.eps = 0
         for _ in range(episode):
-            G = 0
             rewards = []
             obs = self.test_env.reset()
-            for _ in range(self.env_params['max_episode_time_steps']):
+            for t in range(self.env_params['max_episode_time_steps']):
                 action = self.agent.get_action(obs)
                 next_obs, reward, done, _ = self.test_env.step(action)
-                rewards.append(reward.item())
-                if done.item():
-                    for r in reversed(rewards):
-                        G = r + self.agent.gamma * G
+                rewards.append(reward)
+                if done:
                     break
                 else:
                     obs = next_obs
+
+            # compute returns
+            G = 0
+            for r in reversed(rewards):
+                G = r + self.agent.gamma * G
             returns.append(G)
 
         self.agent.eps = old_eps
