@@ -125,7 +125,7 @@ if __name__ == '__main__':
     train_params['agent'] = agent
     # agent_params['agent_model'] = agent
     # create the remote parameter server
-    remote_param_server = BlockStackingParamServer.remote(agent.behavior_policy_net.state_dict())
+    remote_param_server = BlockStackingParamServer.remote(agent.behavior_policy_net.state_dict(), train_params['epochs'])
     # create the remote learner server
     remote_learner = BlockStackingLearner.remote(train_params, env_params, remote_param_server, remote_memory_server)
 

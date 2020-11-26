@@ -78,7 +78,7 @@ def load_data(root_path, file_names):
 
 if __name__ == '__main__':
     root_dir = './'
-    file_names = ['w1_returns.npy', 'w2_returns.npy'
+    file_names = ['parallel_returns.npy'
                   ]
 
     data_list = load_data(root_dir, file_names)

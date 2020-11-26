@@ -19,7 +19,9 @@ class Actor(object):
 
         # environment parameters
         self.env = env_configs['env_fn']()
-        self.episode_time_steps = env_configs['max_episode_time_steps']
+        self.episode_time_steps = env_configs['max_episode_time_steps'] - 1
+        self.total_train_steps = ray.get(self.remote_param_server.get_total_train_steps.remote())
+        self.current_train_step = 0
 
         # running indicators
         self.scheduled_eps = 1
@@ -30,6 +32,8 @@ class Actor(object):
         self.agent.behavior_policy_net.eval()
         # synchronize the scheduled epsilon with the latest epsilon on the parameter server
         self.scheduled_eps = ray.get(self.remote_param_server.get_scheduled_eps.remote())
+        # get the current train step
+        self.current_train_step = ray.get(self.remote_param_server.get_current_train_step.remote())
 
     def send_data(self):
         # send the data to the memory server
@@ -42,8 +46,8 @@ class Actor(object):
         self.update_behavior_policy()
         # initialize the environment
         obs, rewards = self.env.reset(), []
-        # start data collection
-        while True:
+        # start data collection until the training process terminates
+        while self.current_train_step < self.total_train_steps:
             # compute the epsilon
             self.agent.eps = self.scheduled_eps
             # get the action
@@ -68,3 +72,6 @@ class Actor(object):
                 self.send_data()
             else:
                 obs = next_obs
+
+        print(f"Actor {self.id} terminates.")
+

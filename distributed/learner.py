@@ -1,5 +1,4 @@
 import ray
-import numpy as np
 from utils.Schedule import LinearSchedule
 
 
@@ -32,7 +31,7 @@ class Learner(object):
 
     def sync_param_server(self):
         self.remote_param_server.sync_learner_model_params.remote(self.agent.behavior_policy_net.state_dict(),
-                                                                  self.scheduled_eps)
+                                                                  self.scheduled_eps, self.step)
 
     def eval_policy(self, episode):
         old_eps = self.agent.eps
