@@ -137,7 +137,7 @@ class DQNAgent(object):
         obs_arr, action_arr, reward_arr, next_obs_arr, done_arr = batch_data
         # convert to tensors
         batch_data_tensor['obs'] = torch.tensor(obs_arr, dtype=torch.float32).to(self.device)
-        batch_data_tensor['action'] = torch.tensor(action_arr, dtype=torch.int).long().view(-1, 1).to(self.device)
+        batch_data_tensor['action'] = torch.tensor(action_arr).long().view(-1, 1).to(self.device)
         batch_data_tensor['reward'] = torch.tensor(reward_arr, dtype=torch.float32).view(-1, 1).to(self.device)
         batch_data_tensor['next_obs'] = torch.tensor(next_obs_arr, dtype=torch.float32).to(self.device)
         batch_data_tensor['done'] = torch.tensor(done_arr, dtype=torch.float32).view(-1, 1).to(self.device)

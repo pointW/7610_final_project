@@ -58,18 +58,18 @@ if __name__ == '__main__':
     env_params['env_fn'] = env_fn
 
     # create the remote memory server
-    remote_memory_server = ray.remote(MemoryServer).remote(train_params['memory_size'])
+    remote_memory_server = ray.remote(num_cpus=1)(MemoryServer).remote(train_params['memory_size'])
 
     # create the agent
     agent = DQNAgent(env_params, agent_params)
     agent_params['agent_model'] = copy.deepcopy(agent)
 
     # create the remote parameter server
-    remote_param_server = ray.remote(ParamServer).remote(agent.behavior_policy_net.state_dict(), train_params['epochs'])
+    remote_param_server = ray.remote(num_cpus=1)(ParamServer).remote(agent.behavior_policy_net.state_dict(), train_params['epochs'])
 
     # create the remote learner server
     train_params['agent'] = copy.deepcopy(agent)
-    remote_learner = ray.remote(Learner).remote(train_params, env_params, remote_param_server, remote_memory_server)
+    remote_learner = ray.remote(num_cpus=1)(Learner).remote(train_params, env_params, remote_param_server, remote_memory_server)
 
     # create the actors
     actor_num = train_params['worker_num']
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     for i in range(actor_num):
         agent_params['agent_id'] = i
         agent_params['agent_model'] = DQNAgent(env_params, agent_params)
-        actors.append(ray.remote(Actor).remote(agent_params, env_params, remote_param_server, remote_memory_server))
+        actors.append(ray.remote(num_cpus=1)(Actor).remote(agent_params, env_params, remote_param_server, remote_memory_server))
 
     processes = []
     for actor in actors:
