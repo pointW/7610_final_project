@@ -11,6 +11,8 @@ from distributed.actor import Actor
 from distributed.learner import Learner
 from distributed.memory_server import MemoryServer
 from distributed.param_server import ParamServer
+from distributed.actor_state_server import ActorStateServer
+from distributed.actor_monitor import ActorMonitor
 
 if __name__ == '__main__':
     ray.init()  # init the ray
@@ -36,7 +38,9 @@ if __name__ == '__main__':
         'device': 'cpu',
         'lr': 1e-4,
         'gamma': 0.9995,
-        'use_soft_update': False
+        'use_soft_update': False,
+        'crash_prob': 0,
+        'report_alive_t': 0.1
     }
 
     # initialize parameters for training
@@ -71,21 +75,17 @@ if __name__ == '__main__':
     train_params['agent'] = copy.deepcopy(agent)
     remote_learner = ray.remote(num_cpus=1)(Learner).remote(train_params, env_params, remote_param_server, remote_memory_server)
 
+    remote_actor_state_server = ray.remote(num_cpus=1)(ActorStateServer).remote(train_params['worker_num'])
     # create the actors
-    actor_num = train_params['worker_num']
-    actors = []
-    for i in range(actor_num):
-        agent_params['agent_id'] = i
-        agent_params['agent_model'] = DQNAgent(env_params, agent_params)
-        actors.append(ray.remote(num_cpus=1)(Actor).remote(agent_params, env_params, remote_param_server, remote_memory_server))
+    actor_agents = []
+    for i in range(train_params['worker_num']):
+        actor_agents.append(DQNAgent(env_params, agent_params))
+    actor_monitor = ActorMonitor(train_params['worker_num'], ray.remote(num_cpus=1)(Actor), actor_agents, agent_params, env_params,
+                                 remote_param_server, remote_memory_server, remote_actor_state_server, 2)
 
-    processes = []
-    for actor in actors:
-        processes.append(actor)
-
-    processes_running = [p.run.remote() for p in processes]
     test_returns = []
     while ray.get(remote_memory_server.get_size.remote()) < train_params['start_train_memory_size']:
+        actor_monitor.check_and_restart_actors()
         continue
 
     # start training
@@ -95,6 +95,7 @@ if __name__ == '__main__':
     # testing_freq = 2*60
     testing_freq = 10
     for t in range(train_params['epochs']):
+        actor_monitor.check_and_restart_actors()
         # sample a batch data
         ray.get(remote_learner.update.remote())
         ray.get(remote_learner.sync_param_server.remote())
@@ -116,4 +117,4 @@ if __name__ == '__main__':
         )
         pbar.update()
     np.save("./parallel_returns.npy", test_returns)
-    ray.wait(processes_running)
+    ray.wait(actor_monitor.actor_processes)
