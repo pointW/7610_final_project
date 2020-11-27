@@ -16,6 +16,8 @@ from distributed.memory_server import MemoryServer
 from distributed.param_server import ParamServer
 from utils.Schedule import LinearSchedule
 from utils.buffer import QLearningBuffer
+from distributed.actor_state_server import ActorStateServer
+from distributed.actor_monitor import ActorMonitor
 
 ExpertTransition = collections.namedtuple('ExpertTransition', 'state obs action reward next_state next_obs done step_left expert')
 
@@ -101,6 +103,7 @@ if __name__ == '__main__':
         'device': 'cuda',
         'lr': 5e-5,
         'gamma': 0.9,
+        'crash_prob': 0
     }
 
     # initialize parameters for training
@@ -128,20 +131,14 @@ if __name__ == '__main__':
     remote_param_server = BlockStackingParamServer.remote(agent.behavior_policy_net.state_dict(), train_params['epochs'])
     # create the remote learner server
     remote_learner = BlockStackingLearner.remote(train_params, env_params, remote_param_server, remote_memory_server)
-
+    remote_actor_state_server = ray.remote(ActorStateServer).remote(train_params['worker_num'])
     # create the actors
-    # actor_num = 5
-    actors = []
+    actor_agents = []
     for i in range(train_params['worker_num']):
-        agent_params['agent_id'] = i
-        agent_params['agent_model'] = DQNBlock(workspace, heightmap_resolution, agent_params['device'], agent_params['lr'], agent_params['gamma'])
-        actors.append(BlockStackingActor.remote(agent_params, env_params, remote_param_server, remote_memory_server))
-
-    processes = []
-    for actor in actors:
-        processes.append(actor)
-
-    processes_running = [p.run.remote() for p in processes]
+        actor_agents.append(DQNBlock(workspace, heightmap_resolution, agent_params['device'], agent_params['lr'],
+                                     agent_params['gamma']))
+    actor_monitor = ActorMonitor(train_params['worker_num'], BlockStackingActor, actor_agents, agent_params, env_params,
+                                 remote_param_server, remote_memory_server, remote_actor_state_server)
 
     test_returns = []
     losses = []
@@ -155,6 +152,7 @@ if __name__ == '__main__':
     testing_freq = 2*60
     # testing_freq = 10
     for t in range(train_params['epochs']):
+        actor_monitor.check_and_restart_actors()
         # sample a batch data
         loss = ray.get(remote_learner.update.remote())
         losses.append(loss)
@@ -180,11 +178,5 @@ if __name__ == '__main__':
         pbar.update()
     np.save("./parallel_returns.npy", test_returns)
 
-    ray.wait(processes_running)
-
-    # processes = []
-    # for actor in actors:
-    #     processes.append(actor)
-    # processes_running = [p.run.remote() for p in processes]
-    # ray.wait(processes_running)
+    ray.wait(actor_monitor.actor_processes)
 

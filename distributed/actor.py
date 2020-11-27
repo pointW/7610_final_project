@@ -1,8 +1,9 @@
 import ray
-
+import numpy as np
+import time
 
 class Actor(object):
-    def __init__(self, agent_configs, env_configs, param_server_remote, memory_server_remote):
+    def __init__(self, agent_configs, env_configs, param_server_remote, memory_server_remote, actor_state_server_remote):
         # store the IDs
         self.id = agent_configs['agent_id']
 
@@ -12,6 +13,7 @@ class Actor(object):
         # init remote servers
         self.remote_param_server = param_server_remote
         self.remote_memory_server = memory_server_remote
+        self.remote_actor_state_server = actor_state_server_remote
 
         # local experience replay buffer
         self.local_buffer = []
@@ -25,6 +27,9 @@ class Actor(object):
 
         # running indicators
         self.scheduled_eps = 1
+
+        # crash probability
+        self.crash_prob = agent_configs['crash_prob']
 
     def update_behavior_policy(self):
         # synchronize the behavior policy with the latest parameters on the parameter server
@@ -41,6 +46,9 @@ class Actor(object):
         # clear the local memory buffer
         self.local_buffer = []
 
+    def send_alive(self):
+        self.remote_actor_state_server.update_alive.remote(self.id)
+
     def run(self):
         # synchronize the parameters
         self.update_behavior_policy()
@@ -48,6 +56,12 @@ class Actor(object):
         obs, rewards = self.env.reset(), []
         # start data collection until the training process terminates
         while self.current_train_step < self.total_train_steps:
+            # tell remote_actor_state_server i'm alive
+            self.send_alive()
+            # crash with self.crash_prob to simulate actor crash
+            if np.random.random() < self.crash_prob:
+                print('Actor {}: simulating crash'.format(self.id))
+                exit()
             # compute the epsilon
             self.agent.eps = self.scheduled_eps
             # get the action
