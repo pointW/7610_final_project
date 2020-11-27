@@ -103,7 +103,8 @@ if __name__ == '__main__':
         'device': 'cuda',
         'lr': 5e-5,
         'gamma': 0.9,
-        'crash_prob': 0
+        'crash_prob': 0,
+        'report_alive_t': 0.1
     }
 
     # initialize parameters for training

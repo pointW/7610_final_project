@@ -31,6 +31,12 @@ class Actor(object):
         # crash probability
         self.crash_prob = agent_configs['crash_prob']
 
+        # T for reporting alive
+        self.report_alive_t = agent_configs['report_alive_t']
+
+        # last alive reporting time
+        self.last_alive_report_time = time.time()
+
     def update_behavior_policy(self):
         # synchronize the behavior policy with the latest parameters on the parameter server
         self.agent.behavior_policy_net.load_state_dict(ray.get(self.remote_param_server.get_latest_model_params.remote()))
@@ -48,6 +54,7 @@ class Actor(object):
 
     def send_alive(self):
         self.remote_actor_state_server.update_alive.remote(self.id)
+        self.last_alive_report_time = time.time()
 
     def run(self):
         # synchronize the parameters
@@ -57,7 +64,8 @@ class Actor(object):
         # start data collection until the training process terminates
         while self.current_train_step < self.total_train_steps:
             # tell remote_actor_state_server i'm alive
-            self.send_alive()
+            if time.time() - self.last_alive_report_time > self.report_alive_t:
+                self.send_alive()
             # crash with self.crash_prob to simulate actor crash
             if np.random.random() < self.crash_prob:
                 print('Actor {}: simulating crash'.format(self.id))

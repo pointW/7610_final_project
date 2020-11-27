@@ -39,7 +39,8 @@ if __name__ == '__main__':
         'lr': 1e-4,
         'gamma': 0.9995,
         'use_soft_update': False,
-        'crash_prob': 0
+        'crash_prob': 0,
+        'report_alive_t': 0.1
     }
 
     # initialize parameters for training
