@@ -9,7 +9,7 @@ from agent.DQNAgent_PER import DQNAgent
 
 def train_dqn_agent(env, agent, trn_params):
     # create the schedule
-    schedule = LinearSchedule(1, 0.01, trn_params['total_time_steps'] / 2)
+    schedule = LinearSchedule(0.3, 0.01, trn_params['total_time_steps'] / 2)
     beta_schedule = LinearSchedule(0.4, 1.0, train_params['total_time_steps'])
 
     # create memory buffer
@@ -81,18 +81,22 @@ def train_dqn_agent(env, agent, trn_params):
 
     # save the results
     if trn_params['use_priority_experience_replay']:
-        np.save('./baseline_dqn_per_cartpole_v1.npy', trn_returns)
+        np.save('./baseline_dqn_per_' + trn_params['env_name'] + '.npy', trn_returns)
     else:
-        np.save('./baseline_dqn_cartpole_v1.npy', trn_returns)
+        np.save('./baseline_dqn_' + trn_params['env_name'] + '.npy', trn_returns)
 
 
 if __name__ == '__main__':
+
+    init_name = 'MountainCar-v0'
+    init_env = gym.make(init_name)
+
     # init the params
     env_params = {
-        'env_name': 'CartPole-v0',
+        'env_name': init_name,
         'max_episode_time_steps': 200,
-        'act_num': 2,
-        'obs_dim': 4,
+        'act_num': init_env.action_space.n,
+        'obs_dim': init_env.observation_space.shape[0],
         'run_eval_num': 10
     }
 
@@ -107,11 +111,12 @@ if __name__ == '__main__':
         'lr': 1e-4,
         'gamma': 0.9995,
         'use_soft_update': False,
-        'use_prioritized_replay': True
+        'use_prioritized_replay': False
     }
 
     # initialize parameters for training
     train_params = {
+        'env_name': init_name,
         'agent': None,
         'worker_num': 2,
         'batch_size': 128,
@@ -123,7 +128,7 @@ if __name__ == '__main__':
         'update_policy_freq': 4,
         'eval_policy_freq': 100,
         'start_train_step': 1000,
-        'use_priority_experience_replay': True
+        'use_priority_experience_replay': False
     }
 
     # create the environment

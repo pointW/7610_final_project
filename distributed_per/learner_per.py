@@ -20,6 +20,7 @@ class Learner(object):
         # schedule
         self.scheduled_eps = 1
         self.schedule = LinearSchedule(1, 0.01, self.epochs / 2)
+        self.beta_schedule = LinearSchedule(0.4, 1, learn_params['epochs'])
 
         # testing env
         self.env_params = env_params
@@ -35,9 +36,7 @@ class Learner(object):
         self.remote_param_server.sync_learner_model_params.remote(self.agent.behavior_policy_net.state_dict(),
                                                                   self.scheduled_eps, self.step)
 
-    def update_priorities_on_memory_server(self, batch_data, td_err):
-        # get the indices
-        _, _, _, _, _, _, indices = batch_data
+    def update_priorities_on_memory_server(self, indices, td_err):
         # compute the priorities
         new_priorities = np.abs(td_err) + 1e-6
         # update the priorities of the sampled batch data
@@ -70,17 +69,23 @@ class Learner(object):
 
     def update(self):
         self.step += 1
-        batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size))
-        print(batch_data)
         # compute the epsilon
         self.scheduled_eps = self.schedule.get_value(self.step)
         # update the behavior policy
         if self.use_per:
+            # sample the batch data
+            batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size,
+                                                                         self.beta_schedule.get_value(self.step)))
+            # get the indices
+            _, _, _, _, _, _, indices = batch_data
+            # get the td error
             loss, td_err = self.agent.update_behavior_policy(batch_data)
             # update the priorities of the batch data on the remote memory server
-            self.update_priorities_on_memory_server(batch_data, td_err)
+            self.update_priorities_on_memory_server(indices, td_err)
         else:
+            batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size, 0))
             loss = self.agent.update_behavior_policy(batch_data)
+
         # send to the parameter server
         self.sync_param_server()
         return loss

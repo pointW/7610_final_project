@@ -78,7 +78,7 @@ def load_data(root_path, file_names):
 
 if __name__ == '__main__':
     root_dir = './'
-    file_names = ['baseline_dqn_per_cartpole_v1.npy'
+    file_names = ['baseline_dqn_cartpole_v1.npy', 'baseline_dqn_per_cartpole_v1.npy'
                   ]
 
     data_list = load_data(root_dir, file_names)

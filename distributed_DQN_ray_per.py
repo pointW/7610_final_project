@@ -12,6 +12,7 @@ from distributed_per.learner_per import Learner
 from distributed_per.memory_server_per import MemoryServer
 from distributed_per.param_server_per import ParamServer
 
+
 if __name__ == '__main__':
     ray.init()  # init the ray
 
@@ -43,7 +44,7 @@ if __name__ == '__main__':
     # initialize parameters for training
     train_params = {
         'agent': None,
-        'worker_num': 2,
+        'worker_num': 1,
         'batch_size': 4,
         'epochs': 50000,
         'lr': 1e-3,
@@ -55,9 +56,9 @@ if __name__ == '__main__':
     }
 
     memory_params = {
-        'type': 'vanilla',
+        'type': 'per',
         'size': 50000,
-        'alpha': 1  # {alpha in [0, 1], 0: no prioritized; 1: full prioritized}
+        'alpha': 0.6  # {alpha in [0, 1], 0: no prioritized; 1: full prioritized}
     }
 
     def env_fn():
@@ -119,7 +120,6 @@ if __name__ == '__main__':
         pbar.set_description(
             f'Step: {t} |'
             f'G: {np.mean(test_returns[-5:]) if test_returns else 0:.2f} | '
-            # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
         pbar.update()
     np.save("./parallel_per_returns.npy", test_returns)
