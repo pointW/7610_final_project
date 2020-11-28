@@ -417,3 +417,47 @@ class CNNShared(nn.Module):
         x = F.relu(x)
         x = self.fc2(x)
         return x
+
+class InHandConv6(nn.Module):
+    def __init__(self, patch_shape):
+        super().__init__()
+        self.in_hand_conv = nn.Sequential(OrderedDict([
+            ('cnn_conv1', nn.Conv2d(patch_shape[0], 64, kernel_size=3)),
+            ('cnn_relu1', nn.ReLU(inplace=True)),
+            ('cnn_conv2', nn.Conv2d(64, 128, kernel_size=3)),
+            ('cnn_relu2', nn.ReLU(inplace=True)),
+            ('cnn_pool2', nn.MaxPool2d(2)),
+            ('cnn_conv3', nn.Conv2d(128, 256, kernel_size=3)),
+            ('cnn_relu3', nn.ReLU(inplace=True)),
+            ('cnn_conv4', nn.Conv2d(256, 256, kernel_size=3)),
+            ('cnn_relu4', nn.ReLU(inplace=True)),
+        ]))
+
+    def forward(self, in_hand):
+        return self.in_hand_conv(in_hand)
+
+class ResUCatShared96(ResUCat):
+    def __init__(self, n_input_channel=1, n_primitives=1, patch_shape=(1, 24, 24), domain_shape=(1, 100, 100)):
+        super().__init__(n_input_channel, n_primitives, patch_shape, domain_shape)
+        self.in_hand_conv = InHandConv6(patch_shape)
+
+    def forward(self, obs, in_hand):
+        feature_map_1 = self.conv_down_1(obs)
+        feature_map_2 = self.conv_down_2(feature_map_1)
+        feature_map_4 = self.conv_down_4(feature_map_2)
+        feature_map_8 = self.conv_down_8(feature_map_4)
+        feature_map_16 = self.conv_down_16(feature_map_8)
+
+        in_hand_out = self.in_hand_conv(in_hand)
+        feature_map_up_16 = self.conv_cat_in_hand(torch.cat((feature_map_16, in_hand_out), dim=1))
+
+        feature_map_up_8 = self.conv_up_8(torch.cat((feature_map_8, F.interpolate(feature_map_up_16, size=feature_map_8.shape[-1], mode='bilinear', align_corners=False)), dim=1))
+        feature_map_up_4 = self.conv_up_4(torch.cat((feature_map_4, F.interpolate(feature_map_up_8, size=feature_map_4.shape[-1], mode='bilinear', align_corners=False)), dim=1))
+        feature_map_up_2 = self.conv_up_2(torch.cat((feature_map_2, F.interpolate(feature_map_up_4, size=feature_map_2.shape[-1], mode='bilinear', align_corners=False)), dim=1))
+        feature_map_up_1 = self.conv_up_1(torch.cat((feature_map_1, F.interpolate(feature_map_up_2, size=feature_map_1.shape[-1], mode='bilinear', align_corners=False)), dim=1))
+
+        place_q_values = self.place_q_values(feature_map_up_1)
+        pick_q_values = self.pick_q_values(feature_map_up_1)
+        q_values = torch.cat((pick_q_values, place_q_values), dim=1)
+
+        return q_values, feature_map_up_16

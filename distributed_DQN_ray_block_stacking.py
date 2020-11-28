@@ -22,7 +22,7 @@ from distributed.actor_monitor import ActorMonitor
 ExpertTransition = collections.namedtuple('ExpertTransition', 'state obs action reward next_state next_obs done step_left expert')
 
 
-@ray.remote(num_gpus=0.25)
+@ray.remote(num_gpus=0.15)
 class BlockStackingActor(Actor):
     pass
 
@@ -43,13 +43,17 @@ class BlockStackingMemoryServer:
         return self.storage.sample(batch_size)
 
 
-@ray.remote(num_gpus=0.25)
+@ray.remote(num_gpus=0.15)
 class BlockStackingParamServer(ParamServer):
     pass
 
 
-@ray.remote(num_gpus=0.25)
+@ray.remote(num_gpus=0.15)
 class BlockStackingLearner(Learner):
+    # def __init__(self, learn_params, env_params, param_server_remote, memory_server_remote):
+    #     super().__init__(learn_params, env_params, param_server_remote, memory_server_remote)
+    #     self.schedule = LinearSchedule(0.5, 0.01, self.epochs / 2)
+
     def eval_policy(self, episode):
         old_eps = self.agent.eps
         returns = []
@@ -85,7 +89,7 @@ if __name__ == '__main__':
     # init the params
     env_config = {'simulator': 'pybullet', 'env': 'block_stacking', 'workspace': workspace, 'max_steps': 10,
                   'obs_size': heightmap_size, 'fast_mode': True, 'action_sequence': 'xyp', 'render': False,
-                  'num_objects': 3, 'random_orientation': False, 'reward_type': 'sparse', 'simulate_grasp': True,
+                  'num_objects': 4, 'random_orientation': False, 'reward_type': 'sparse', 'simulate_grasp': True,
                   'robot': 'kuka', 'workspace_check': 'point', 'in_hand_mode': 'raw', 'heightmap_resolution': heightmap_resolution}
 
     def env_fn():
@@ -94,7 +98,7 @@ if __name__ == '__main__':
     env_params = {
         'env_name': 'block_stacking',
         'max_episode_time_steps': 10,
-        'total_time_steps': 10000,
+        'total_time_steps': 50000,
         'env_fn': env_fn
     }
 
@@ -110,10 +114,10 @@ if __name__ == '__main__':
     # initialize parameters for training
     train_params = {
         'agent': None,
-        'memory_size': 50000,
+        'memory_size': 100000,
         'batch_size': 32,
         'episode_time_steps': 10,
-        'epochs': 10000,
+        'epochs': 50000,
         'lr': 5e-5,
         'update_target_freq': 100,
         'update_policy_freq': 10,
@@ -150,7 +154,7 @@ if __name__ == '__main__':
     pbar = tqdm.trange(train_params['epochs'])
     G = 0
     t0 = time.time()
-    testing_freq = 2*60
+    testing_freq = 5*60
     # testing_freq = 10
     for t in range(train_params['epochs']):
         actor_monitor.check_and_restart_actors()
@@ -166,14 +170,15 @@ if __name__ == '__main__':
 
         if time.time() - t0 > (len(test_returns) + 1) * testing_freq:
             # if not np.mod(t, 200):
-            G = np.mean(ray.get(remote_learner.eval_policy.remote(20)))
+            G = ray.get(remote_learner.eval_policy.remote(20))
             test_returns.append(G)
 
         # print information
         pbar.set_description(
             f'Step: {t} |'
-            f'Loss: {np.mean(losses[-10:]) if losses else 0:.4f} |'
-            f'G: {np.mean(test_returns[-5:]) if test_returns else 0:.2f} | '
+            f'Loss: {np.mean(losses[-10:]) if losses else 0:.3f} |'
+            f'Test return: {np.mean(test_returns[-5:]) if test_returns else 0:.3f} | '
+            f'Actor return: {ray.get(remote_actor_state_server.get_avg_return.remote()):.3f} | '
             # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
         pbar.update()

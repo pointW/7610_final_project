@@ -77,14 +77,15 @@ class Actor(object):
             # interaction with the environment
             next_obs, reward, done, _ = self.env.step(action)
             # record rewards
-            rewards.append(reward)
+            rewards.append(reward.item())
             # add the local buffer
             self.local_buffer.append((obs, action, reward, next_obs, done))
             # check termination
             if done:
-                # G = 0
-                # for r in reversed(rewards):
-                #     G = r + 0.9995 * G
+                G = 0
+                for r in reversed(rewards):
+                    G = r + self.agent.gamma * G
+                self.remote_actor_state_server.add_return.remote(G)
                 # print(f"Actor {self.id}: G = {G}, Eps = {self.scheduled_eps}")
                 # reset environment
                 obs, rewards = self.env.reset(), []
