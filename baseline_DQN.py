@@ -89,8 +89,8 @@ def train_dqn_agent(env, agent, trn_params):
 if __name__ == '__main__':
     # init the params
     env_params = {
-        'env_name': 'CartPole-v1',
-        'max_episode_time_steps': 500,
+        'env_name': 'CartPole-v0',
+        'max_episode_time_steps': 200,
         'act_num': 2,
         'obs_dim': 4,
         'run_eval_num': 10
@@ -117,7 +117,7 @@ if __name__ == '__main__':
         'batch_size': 128,
         'memory_size': 50000,
         'total_time_steps': 100000,
-        'episode_time_steps': 500,
+        'episode_time_steps': 200,
         'lr': 1e-3,
         'update_target_freq': 2000,
         'update_policy_freq': 4,
