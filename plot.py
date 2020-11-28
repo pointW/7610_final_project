@@ -78,7 +78,7 @@ def load_data(root_path, file_names):
 
 if __name__ == '__main__':
     root_dir = './results/'
-    file_names = ['baseline_dqn_LunarLander-v2.npy', 'baseline_dqn_per_LunarLander-v2.npy'
+    file_names = ['baseline_dqn_CartPole-v0.npy'
                   ]
 
     data_list = load_data(root_dir, file_names)

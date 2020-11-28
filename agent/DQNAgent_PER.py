@@ -118,6 +118,9 @@ class DQNAgent(object):
 
         # compute the loss
         if self.use_per:
+            # compute the td error
+            with torch.no_grad():
+                td_err = td_target_value - pred_q_value
             weighted_pred_q_value = pred_q_value * weights_tensor
             weighted_td_target_value = td_target_value * weights_tensor
             td_loss = torch.nn.functional.mse_loss(weighted_pred_q_value, weighted_td_target_value)
@@ -130,7 +133,7 @@ class DQNAgent(object):
         self.optimizer.step()
 
         if self.use_per:
-            return td_loss.item(), td_target_value
+            return td_loss.item(), td_err
         else:
             return td_loss.item()
 

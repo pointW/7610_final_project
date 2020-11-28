@@ -88,7 +88,7 @@ def train_dqn_agent(env, agent, trn_params):
 
 if __name__ == '__main__':
 
-    init_name = 'MountainCar-v0'
+    init_name = 'CartPole-v0'
     init_env = gym.make(init_name)
 
     # init the params
@@ -121,7 +121,7 @@ if __name__ == '__main__':
         'worker_num': 2,
         'batch_size': 128,
         'memory_size': 50000,
-        'total_time_steps': 100000,
+        'total_time_steps': 50000,
         'episode_time_steps': 200,
         'lr': 1e-3,
         'update_target_freq': 2000,
