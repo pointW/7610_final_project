@@ -78,7 +78,8 @@ def load_data(root_path, file_names):
 
 if __name__ == '__main__':
     root_dir = './'
-    file_names = ['parallel_returns.npy'
+    file_names = ['_parallel_returns.npy',
+                  'per_parallel_returns.npy'
                   ]
 
     data_list = load_data(root_dir, file_names)
@@ -91,10 +92,10 @@ if __name__ == '__main__':
         'font_size': 20,
         'title': 'vanilla and double DQN: CartPole-v0',
         'color': ['tab:purple', 'tab:orange', 'tab:green'],
-        'legend': ['1-worker', '2-workers', '4-workers'],
+        'legend': ['normal', 'per', '4-workers'],
         'legend_pos': 'lower right'
     }
 
-    win_size = 50
+    win_size = 10
 
     plot_compared_learning_curve(data_list, win_size, plot_configs)

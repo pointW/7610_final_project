@@ -63,6 +63,9 @@ class Actor(object):
         obs, rewards = self.env.reset(), []
         # start data collection until the training process terminates
         while self.current_train_step < self.total_train_steps:
+            # TODO: sleep to prevent learner never acquire data from buffer
+            #  because actor is always adding data.
+            time.sleep(0.01)
             # tell remote_actor_state_server i'm alive
             if time.time() - self.last_alive_report_time > self.report_alive_t:
                 self.send_alive()
@@ -77,7 +80,7 @@ class Actor(object):
             # interaction with the environment
             next_obs, reward, done, _ = self.env.step(action)
             # record rewards
-            rewards.append(reward.item())
+            rewards.append(reward)
             # add the local buffer
             self.local_buffer.append((obs, action, reward, next_obs, done))
             # check termination

@@ -6,18 +6,19 @@ import copy
 import time
 
 from agent.DQNAgent import DQNAgent
+from agent.DQNAgent_per import DQNAgentPER
 
 from distributed.actor import Actor
 from distributed.learner import Learner
+from distributed.lerner_per import LearnerPER
 from distributed.memory_server import MemoryServer
+from distributed.memory_server_per import MemoryServerPER
 from distributed.param_server import ParamServer
 from distributed.actor_state_server import ActorStateServer
 from distributed.actor_monitor import ActorMonitor
 
 if __name__ == '__main__':
     ray.init()  # init the ray
-
-    total_time_steps = 100000
 
     # init the params
     env_params = {
@@ -49,23 +50,33 @@ if __name__ == '__main__':
         'worker_num': 2,
         'memory_size': 50000,
         'batch_size': 128,
-        'epochs': 50000,
+        'epochs': 10000,
         'lr': 1e-3,
         'update_target_freq': 2000,
         'update_policy_freq': 1,
         'eval_policy_freq': 100,
-        'start_train_memory_size': 1000
+        'start_train_memory_size': 1000,
+        'per_alpha': 0.6,
+        'per_beta': 0.4
     }
+
+    PER = True
 
     def env_fn():
         return gym.make(env_params['env_name'])
     env_params['env_fn'] = env_fn
 
     # create the remote memory server
-    remote_memory_server = ray.remote(num_cpus=1)(MemoryServer).remote(train_params['memory_size'])
+    if PER:
+        remote_memory_server = ray.remote(num_cpus=1)(MemoryServerPER).remote(train_params['memory_size'], train_params['per_alpha'])
+    else:
+        remote_memory_server = ray.remote(num_cpus=1)(MemoryServer).remote(train_params['memory_size'])
 
     # create the agent
-    agent = DQNAgent(env_params, agent_params)
+    if PER:
+        agent = DQNAgentPER(env_params, agent_params)
+    else:
+        agent = DQNAgent(env_params, agent_params)
     agent_params['agent_model'] = copy.deepcopy(agent)
 
     # create the remote parameter server
@@ -73,7 +84,11 @@ if __name__ == '__main__':
 
     # create the remote learner server
     train_params['agent'] = copy.deepcopy(agent)
-    remote_learner = ray.remote(num_cpus=1)(Learner).remote(train_params, env_params, remote_param_server, remote_memory_server)
+    if PER:
+        remote_learner = ray.remote(num_cpus=1)(LearnerPER).remote(train_params, env_params, remote_param_server,
+                                                                   remote_memory_server)
+    else:
+        remote_learner = ray.remote(num_cpus=1)(Learner).remote(train_params, env_params, remote_param_server, remote_memory_server)
 
     remote_actor_state_server = ray.remote(num_cpus=1)(ActorStateServer).remote(train_params['worker_num'])
     # create the actors
@@ -105,7 +120,8 @@ if __name__ == '__main__':
             # update the target network
             ray.get(remote_learner.update_target.remote())
 
-        if time.time() - t0 > (len(test_returns) + 1) * testing_freq:
+        # if time.time() - t0 > (len(test_returns) + 1) * testing_freq:
+        if t % 200 == 0:
             G = np.average(ray.get(remote_learner.eval_policy.remote(10)))
             test_returns.append(G)
 
@@ -116,5 +132,5 @@ if __name__ == '__main__':
             # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
         pbar.update()
-    np.save("./parallel_returns.npy", test_returns)
+    np.save("./{}_parallel_returns.npy".format('per' if PER else 'normal'), test_returns)
     ray.wait(actor_monitor.actor_processes)

@@ -7,14 +7,13 @@ import collections
 import time
 
 from agent.block_stacking.dqn_wrapper import DQNBlock
-from network.models import ResUCatShared
+from agent.block_stacking.dqn_per import DQNBlockPER
 from env.block_stacking.env_wrapper import BlockStackingEnv
-from utils.ExperienceReplay import ReplayBuffer
 from distributed.actor import Actor
 from distributed.learner import Learner
-from distributed.memory_server import MemoryServer
+from distributed.lerner_per import LearnerPER
 from distributed.param_server import ParamServer
-from utils.Schedule import LinearSchedule
+from distributed.block_stacking_memory_server_per import BlockStackingMemoryServerPER
 from utils.buffer import QLearningBuffer
 from distributed.actor_state_server import ActorStateServer
 from distributed.actor_monitor import ActorMonitor
@@ -48,7 +47,7 @@ class BlockStackingParamServer(ParamServer):
     pass
 
 
-@ray.remote(num_gpus=0.15)
+# @ray.remote(num_gpus=0.15)
 class BlockStackingLearner(Learner):
     # def __init__(self, learn_params, env_params, param_server_remote, memory_server_remote):
     #     super().__init__(learn_params, env_params, param_server_remote, memory_server_remote)
@@ -77,6 +76,13 @@ class BlockStackingLearner(Learner):
         self.agent.eps = old_eps
         return returns
 
+
+@ray.remote(num_gpus=0.15)
+class BlockStackingLearnerPER(LearnerPER, BlockStackingLearner):
+    def eval_policy(self, episode):
+        return BlockStackingLearner.eval_policy(self, episode)
+
+
 if __name__ == '__main__':
     ray.init(num_gpus=2)  # init the ray
     workspace = np.asarray([[0.35, 0.65],
@@ -98,7 +104,7 @@ if __name__ == '__main__':
     env_params = {
         'env_name': 'block_stacking',
         'max_episode_time_steps': 10,
-        'total_time_steps': 50000,
+        'total_time_steps': 20000,
         'env_fn': env_fn
     }
 
@@ -117,25 +123,38 @@ if __name__ == '__main__':
         'memory_size': 100000,
         'batch_size': 32,
         'episode_time_steps': 10,
-        'epochs': 50000,
+        'epochs': 20000,
         'lr': 5e-5,
         'update_target_freq': 100,
         'update_policy_freq': 10,
         'start_train_memory_size': 100,
         'syn_param_freq': 10,
-        'worker_num': 5
+        'worker_num': 5,
+        'per_alpha': 0.6,
+        'per_beta': 0.4
     }
 
+    PER = True
+
     # create the remote memory server
-    remote_memory_server = BlockStackingMemoryServer.remote(train_params['memory_size'])
+    if PER:
+        remote_memory_server = ray.remote(BlockStackingMemoryServerPER).remote(train_params['memory_size'], train_params['per_alpha'])
+    else:
+        remote_memory_server = BlockStackingMemoryServer.remote(train_params['memory_size'])
     # create the agent
-    agent = DQNBlock(workspace, heightmap_resolution, agent_params['device'], agent_params['lr'], agent_params['gamma'])
+    if PER:
+        agent = DQNBlockPER(workspace, heightmap_resolution, agent_params['device'], agent_params['lr'], agent_params['gamma'])
+    else:
+        agent = DQNBlock(workspace, heightmap_resolution, agent_params['device'], agent_params['lr'], agent_params['gamma'])
     train_params['agent'] = agent
     # agent_params['agent_model'] = agent
     # create the remote parameter server
     remote_param_server = BlockStackingParamServer.remote(agent.behavior_policy_net.state_dict(), train_params['epochs'])
     # create the remote learner server
-    remote_learner = BlockStackingLearner.remote(train_params, env_params, remote_param_server, remote_memory_server)
+    if PER:
+        remote_learner = BlockStackingLearnerPER.remote(train_params, env_params, remote_param_server, remote_memory_server)
+    else:
+        remote_learner = BlockStackingLearner.remote(train_params, env_params, remote_param_server, remote_memory_server)
     remote_actor_state_server = ray.remote(ActorStateServer).remote(train_params['worker_num'])
     # create the actors
     actor_agents = []
