@@ -38,7 +38,7 @@ if __name__ == '__main__':
         'lr': 1e-4,
         'gamma': 0.9995,
         'use_soft_update': False,
-        'use_prioritized_replay': True
+        'use_prioritized_replay': False
     }
 
     # initialize parameters for training
@@ -52,11 +52,11 @@ if __name__ == '__main__':
         'update_policy_freq': 1,
         'eval_policy_freq': 100,
         'start_train_memory_size': 1000,
-        'use_prioritized_replay': True
+        'use_prioritized_replay': False
     }
 
     memory_params = {
-        'type': 'per',
+        'type': 'vanilla',
         'size': 50000,
         'alpha': 0.6  # {alpha in [0, 1], 0: no prioritized; 1: full prioritized}
     }

@@ -109,7 +109,7 @@ if __name__ == '__main__':
         'polyak': 0.95,
         'device': 'cpu',
         'lr': 1e-4,
-        'gamma': 0.9995,
+        'gamma': 0.995,
         'use_soft_update': False,
         'use_prioritized_replay': False
     }
@@ -120,7 +120,7 @@ if __name__ == '__main__':
         'agent': None,
         'worker_num': 2,
         'batch_size': 128,
-        'memory_size': 50000,
+        'memory_size': 200000,
         'total_time_steps': 50000,
         'episode_time_steps': 200,
         'lr': 1e-3,

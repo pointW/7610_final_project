@@ -121,9 +121,7 @@ class DQNAgent(object):
             # compute the td error
             with torch.no_grad():
                 td_err = td_target_value - pred_q_value
-            weighted_pred_q_value = pred_q_value * weights_tensor
-            weighted_td_target_value = td_target_value * weights_tensor
-            td_loss = torch.nn.functional.mse_loss(weighted_pred_q_value, weighted_td_target_value)
+            td_loss = (weights_tensor * (pred_q_value - td_target_value) ** 2).mean()
         else:
             td_loss = torch.nn.functional.mse_loss(pred_q_value, td_target_value)
 
