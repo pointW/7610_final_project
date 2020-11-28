@@ -57,7 +57,7 @@ def plot_compared_learning_curve(data_list, win_size, plot_configs):
         mu = smoothed_data['mean'][i]
         var = smoothed_data['var'][i]
         t = np.arange(mu.shape[0])
-        ax.plot(t, mu, lw=2, label=plot_configs['legend'][i], color=plot_configs['color'][i])
+        ax.plot(t, mu, lw=3, label=plot_configs['legend'][i], color=plot_configs['color'][i])
         ax.fill_between(t, mu + var, mu - var, lw=2, facecolor=plot_configs['color'][i], alpha=0.5)
         ax.legend(loc=plot_configs['legend_pos'], fontsize=plot_configs['font_size'])
         ax.set_xlabel(plot_configs['x_label'], fontsize=plot_configs['font_size'])
@@ -78,7 +78,7 @@ def load_data(root_path, file_names):
 
 if __name__ == '__main__':
     root_dir = './'
-    file_names = ['parallel_returns.npy'
+    file_names = ['baseline_dqn_per_cartpole_v1.npy'
                   ]
 
     data_list = load_data(root_dir, file_names)
@@ -91,10 +91,10 @@ if __name__ == '__main__':
         'font_size': 20,
         'title': 'vanilla and double DQN: CartPole-v0',
         'color': ['tab:purple', 'tab:orange', 'tab:green'],
-        'legend': ['1-worker', '2-workers', '4-workers'],
+        'legend': ['dqn', 'dqn-per', '4-workers'],
         'legend_pos': 'lower right'
     }
 
-    win_size = 50
+    win_size = 100
 
     plot_compared_learning_curve(data_list, win_size, plot_configs)

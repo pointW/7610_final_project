@@ -1,4 +1,5 @@
 import ray
+import numpy as np
 from utils.Schedule import LinearSchedule
 
 
@@ -9,6 +10,7 @@ class Learner(object):
         self.remote_param_server = param_server_remote
 
         # learning params
+        self.use_per = learn_params['use_prioritized_replay']
         self.worker_num = learn_params['worker_num']
         self.epochs = learn_params['epochs']  # training epochs
         self.agent = learn_params['agent']  # model of the agent
@@ -32,6 +34,14 @@ class Learner(object):
     def sync_param_server(self):
         self.remote_param_server.sync_learner_model_params.remote(self.agent.behavior_policy_net.state_dict(),
                                                                   self.scheduled_eps, self.step)
+
+    def update_priorities_on_memory_server(self, batch_data, td_err):
+        # get the indices
+        _, _, _, _, _, _, indices = batch_data
+        # compute the priorities
+        new_priorities = np.abs(td_err) + 1e-6
+        # update the priorities of the sampled batch data
+        self.remote_memory_server.update_priorities.remote(indices, new_priorities)
 
     def eval_policy(self, episode):
         old_eps = self.agent.eps
@@ -61,10 +71,16 @@ class Learner(object):
     def update(self):
         self.step += 1
         batch_data = ray.get(self.remote_memory_server.sample.remote(self.batch_size))
+        print(batch_data)
         # compute the epsilon
         self.scheduled_eps = self.schedule.get_value(self.step)
         # update the behavior policy
-        loss = self.agent.update_behavior_policy(batch_data)
+        if self.use_per:
+            loss, td_err = self.agent.update_behavior_policy(batch_data)
+            # update the priorities of the batch data on the remote memory server
+            self.update_priorities_on_memory_server(batch_data, td_err)
+        else:
+            loss = self.agent.update_behavior_policy(batch_data)
         # send to the parameter server
         self.sync_param_server()
         return loss

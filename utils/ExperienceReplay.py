@@ -6,6 +6,7 @@
     Code is implemented based on openai baselines
 """
 import numpy as np
+import random
 from utils.segment_tree import SumSegmentTree, MinSegmentTree
 
 
@@ -17,27 +18,27 @@ class ReplayBuffer(object):
     """
     def __init__(self, buffer_size):
         # total size of the replay buffer
-        self.total_size = buffer_size
+        self._maxsize = buffer_size
 
         # create a list to store the transitions
-        self._data_buffer = []
+        self._storage = []
         self._next_idx = 0
 
     def __len__(self):
-        return len(self._data_buffer)
+        return len(self._storage)
 
     def add(self, obs, act, reward, next_obs, done):
         # create a tuple
         trans = (obs, act, reward, next_obs, done)
 
         # interesting implementation
-        if self._next_idx >= len(self._data_buffer):
-            self._data_buffer.append(trans)
+        if self._next_idx >= len(self._storage):
+            self._storage.append(trans)
         else:
-            self._data_buffer[self._next_idx] = trans
+            self._storage[self._next_idx] = trans
 
         # increase the index
-        self._next_idx = (self._next_idx + 1) % self.total_size
+        self._next_idx = (self._next_idx + 1) % self._maxsize
 
     def _encode_sample(self, indices):
         # lists for transitions
@@ -46,7 +47,7 @@ class ReplayBuffer(object):
         # collect the data
         for idx in indices:
             # get the single transition
-            data = self._data_buffer[idx]
+            data = self._storage[idx]
             obs, act, reward, next_obs, d = data
             # store to the list
             obs_list.append(np.array(obs, copy=False))
@@ -58,10 +59,13 @@ class ReplayBuffer(object):
         return np.array(obs_list), np.array(actions_list), np.array(rewards_list), np.array(next_obs_list), np.array(
             dones_list)
 
-    def sample_batch(self, batch_size):
+    def sample_batch(self, batch_size, beta):
         # sample indices with replaced
-        indices = [np.random.randint(0, len(self._data_buffer)) for _ in range(batch_size)]
+        indices = [np.random.randint(0, len(self._storage)) for _ in range(batch_size)]
         return self._encode_sample(indices)
+
+    def update_priorities(self, indices, new_priorities):
+        pass
 
 
 class PrioritizedReplayBuffer(ReplayBuffer):
@@ -108,7 +112,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             res.append(idx)
         return res
 
-    def sample(self, batch_size, beta):
+    def sample_batch(self, batch_size, beta):
         """Sample a batch of experiences.
         compared to ReplayBuffer.sample
         it also returns importance weights and idxes

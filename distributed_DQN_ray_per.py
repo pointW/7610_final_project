@@ -36,21 +36,28 @@ if __name__ == '__main__':
         'device': 'cpu',
         'lr': 1e-4,
         'gamma': 0.9995,
-        'use_soft_update': False
+        'use_soft_update': False,
+        'use_prioritized_replay': True
     }
 
     # initialize parameters for training
     train_params = {
         'agent': None,
         'worker_num': 2,
-        'memory_size': 50000,
-        'batch_size': 128,
+        'batch_size': 4,
         'epochs': 50000,
         'lr': 1e-3,
         'update_target_freq': 2000,
         'update_policy_freq': 1,
         'eval_policy_freq': 100,
-        'start_train_memory_size': 1000
+        'start_train_memory_size': 1000,
+        'use_prioritized_replay': True
+    }
+
+    memory_params = {
+        'type': 'vanilla',
+        'size': 50000,
+        'alpha': 1  # {alpha in [0, 1], 0: no prioritized; 1: full prioritized}
     }
 
     def env_fn():
@@ -58,7 +65,7 @@ if __name__ == '__main__':
     env_params['env_fn'] = env_fn
 
     # create the remote memory server
-    remote_memory_server = ray.remote(num_cpus=1)(MemoryServer).remote(train_params['memory_size'])
+    remote_memory_server = ray.remote(num_cpus=1)(MemoryServer).remote(memory_params)
 
     # create the agent
     agent = DQNAgent(env_params, agent_params)

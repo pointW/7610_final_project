@@ -52,6 +52,9 @@ class DQNAgent(object):
         self.behavior_policy_net.to(self.device)
         self.target_policy_net.to(self.device)
 
+        # use prioritized experience replay
+        self.use_per = agent_params['use_prioritized_replay']
+
         # optimizer
         self.optimizer = torch.optim.Adam(self.behavior_policy_net.parameters(), lr=self.agent_params['lr'])
 
@@ -74,12 +77,23 @@ class DQNAgent(object):
         # convert batch data to tensor and put them on device
         batch_data_tensor = self._batch_to_tensor(batch_data)
 
-        # get the transition data
-        obs_tensor = batch_data_tensor['obs']
-        actions_tensor = batch_data_tensor['action']
-        next_obs_tensor = batch_data_tensor['next_obs']
-        rewards_tensor = batch_data_tensor['reward']
-        dones_tensor = batch_data_tensor['done']
+        if self.use_per:
+            # get the transition data
+            obs_tensor = batch_data_tensor['obs']
+            actions_tensor = batch_data_tensor['action']
+            next_obs_tensor = batch_data_tensor['next_obs']
+            rewards_tensor = batch_data_tensor['reward']
+            dones_tensor = batch_data_tensor['done']
+            weights_tensor = batch_data_tensor['weights']
+        else:
+            # get the transition data
+            obs_tensor = batch_data_tensor['obs']
+            actions_tensor = batch_data_tensor['action']
+            next_obs_tensor = batch_data_tensor['next_obs']
+            rewards_tensor = batch_data_tensor['reward']
+            dones_tensor = batch_data_tensor['done']
+            # set as a default
+            weights_tensor = torch.ones_like(dones_tensor)
 
         # compute the q value estimation using the behavior network
         pred_q_value = self.behavior_policy_net(obs_tensor)
@@ -91,23 +105,34 @@ class DQNAgent(object):
             # no gradient should be tracked
             with torch.no_grad():
                 max_next_q_value = self.target_policy_net(next_obs_tensor).max(dim=1)[0].view(-1, 1)
-                td_target_value = rewards_tensor + self.agent_params['gamma'] * (1 - dones_tensor) * max_next_q_value
         else:
             # compute the TD target using double method: TD = r + gamma * Q(s', argmaxQ_b(s'))
             with torch.no_grad():
                 max_next_actions = self.behavior_policy_net(next_obs_tensor).max(dim=1)[1].view(-1, 1).long()
                 max_next_q_value = self.target_policy_net(next_obs_tensor).gather(dim=1, index=max_next_actions).view(
                     -1, 1)
-                td_target_value = rewards_tensor + self.agent_params['gamma'] * (1 - dones_tensor) * max_next_q_value
-                td_target_value = td_target_value.detach()
+
+        # compute the TD target
+        td_target_value = rewards_tensor + self.agent_params['gamma'] * (1 - dones_tensor) * max_next_q_value
+        td_target_value = td_target_value.detach()
 
         # compute the loss
-        td_loss = torch.nn.functional.mse_loss(pred_q_value, td_target_value)
+        if self.use_per:
+            weighted_pred_q_value = pred_q_value * weights_tensor
+            weighted_td_target_value = td_target_value * weights_tensor
+            td_loss = torch.nn.functional.mse_loss(weighted_pred_q_value, weighted_td_target_value)
+        else:
+            td_loss = torch.nn.functional.mse_loss(pred_q_value, td_target_value)
 
         # minimize the loss
         self.optimizer.zero_grad()
         td_loss.backward()
         self.optimizer.step()
+
+        if self.use_per:
+            return td_loss.item(), td_target_value
+        else:
+            return td_loss.item()
 
     # update update target policy
     def update_target_policy(self):
@@ -131,16 +156,29 @@ class DQNAgent(object):
         return arr_tensor
 
     def _batch_to_tensor(self, batch_data):
-        # store the tensor
-        batch_data_tensor = {'obs': [], 'action': [], 'reward': [], 'next_obs': [], 'done': []}
-        # get the numpy arrays
-        obs_arr, action_arr, reward_arr, next_obs_arr, done_arr = batch_data
-        # convert to tensors
-        batch_data_tensor['obs'] = torch.tensor(obs_arr, dtype=torch.float32).to(self.device)
-        batch_data_tensor['action'] = torch.tensor(action_arr).long().view(-1, 1).to(self.device)
-        batch_data_tensor['reward'] = torch.tensor(reward_arr, dtype=torch.float32).view(-1, 1).to(self.device)
-        batch_data_tensor['next_obs'] = torch.tensor(next_obs_arr, dtype=torch.float32).to(self.device)
-        batch_data_tensor['done'] = torch.tensor(done_arr, dtype=torch.float32).view(-1, 1).to(self.device)
+        if self.use_per:
+            # store the tensor
+            batch_data_tensor = {'obs': [], 'action': [], 'reward': [], 'next_obs': [], 'done': [], 'weights': []}
+            # unpack the data
+            obs_arr, action_arr, reward_arr, next_obs_arr, done_arr, weights_arr, _ = batch_data
+            # convert to tensors
+            batch_data_tensor['obs'] = torch.tensor(obs_arr, dtype=torch.float32).to(self.device)
+            batch_data_tensor['action'] = torch.tensor(action_arr).long().view(-1, 1).to(self.device)
+            batch_data_tensor['reward'] = torch.tensor(reward_arr, dtype=torch.float32).view(-1, 1).to(self.device)
+            batch_data_tensor['next_obs'] = torch.tensor(next_obs_arr, dtype=torch.float32).to(self.device)
+            batch_data_tensor['done'] = torch.tensor(done_arr, dtype=torch.float32).view(-1, 1).to(self.device)
+            batch_data_tensor['weights'] = torch.tensor(weights_arr, dtype=torch.float32).view(-1, 1).to(self.device)
+        else:
+            # store the tensor
+            batch_data_tensor = {'obs': [], 'action': [], 'reward': [], 'next_obs': [], 'done': []}
+            # get the numpy arrays
+            obs_arr, action_arr, reward_arr, next_obs_arr, done_arr = batch_data
+            # convert to tensors
+            batch_data_tensor['obs'] = torch.tensor(obs_arr, dtype=torch.float32).to(self.device)
+            batch_data_tensor['action'] = torch.tensor(action_arr).long().view(-1, 1).to(self.device)
+            batch_data_tensor['reward'] = torch.tensor(reward_arr, dtype=torch.float32).view(-1, 1).to(self.device)
+            batch_data_tensor['next_obs'] = torch.tensor(next_obs_arr, dtype=torch.float32).to(self.device)
+            batch_data_tensor['done'] = torch.tensor(done_arr, dtype=torch.float32).view(-1, 1).to(self.device)
 
         return batch_data_tensor
 
@@ -168,7 +206,7 @@ class DQNAgent(object):
                 if done:
                     G = 0
                     for r in reversed(rewards):
-                        G = r + 0.9995 * G
+                        G = r + self.gamma * G
                     returns.append(G)
                     break
                 else:
