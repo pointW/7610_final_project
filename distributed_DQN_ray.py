@@ -22,10 +22,10 @@ if __name__ == '__main__':
 
     # init the params
     env_params = {
-        'env_name': 'CartPole-v0',
+        'env_name': 'LunarLander-v2',
         'max_episode_time_steps': 200,
-        'act_num': 2,
-        'obs_dim': 4,
+        'act_num': 4,
+        'obs_dim': 8,
         'run_eval_num': 10
     }
 
@@ -47,10 +47,10 @@ if __name__ == '__main__':
     # initialize parameters for training
     train_params = {
         'agent': None,
-        'worker_num': 2,
+        'worker_num': 5,
         'memory_size': 50000,
-        'batch_size': 128,
-        'epochs': 10000,
+        'batch_size': 32,
+        'epochs': 20000,
         'lr': 1e-3,
         'update_target_freq': 2000,
         'update_policy_freq': 1,
@@ -68,9 +68,9 @@ if __name__ == '__main__':
 
     # create the remote memory server
     if PER:
-        remote_memory_server = ray.remote(num_cpus=1)(MemoryServerPER).remote(train_params['memory_size'], train_params['per_alpha'])
+        remote_memory_server = ray.remote(MemoryServerPER).remote(train_params['memory_size'], train_params['per_alpha'])
     else:
-        remote_memory_server = ray.remote(num_cpus=1)(MemoryServer).remote(train_params['memory_size'])
+        remote_memory_server = ray.remote(MemoryServer).remote(train_params['memory_size'])
 
     # create the agent
     if PER:
@@ -80,22 +80,22 @@ if __name__ == '__main__':
     agent_params['agent_model'] = copy.deepcopy(agent)
 
     # create the remote parameter server
-    remote_param_server = ray.remote(num_cpus=1)(ParamServer).remote(agent.behavior_policy_net.state_dict(), train_params['epochs'])
+    remote_param_server = ray.remote(ParamServer).remote(agent.behavior_policy_net.state_dict(), train_params['epochs'])
 
     # create the remote learner server
     train_params['agent'] = copy.deepcopy(agent)
     if PER:
-        remote_learner = ray.remote(num_cpus=1)(LearnerPER).remote(train_params, env_params, remote_param_server,
+        remote_learner = ray.remote(LearnerPER).remote(train_params, env_params, remote_param_server,
                                                                    remote_memory_server)
     else:
-        remote_learner = ray.remote(num_cpus=1)(Learner).remote(train_params, env_params, remote_param_server, remote_memory_server)
+        remote_learner = ray.remote(Learner).remote(train_params, env_params, remote_param_server, remote_memory_server)
 
-    remote_actor_state_server = ray.remote(num_cpus=1)(ActorStateServer).remote(train_params['worker_num'])
+    remote_actor_state_server = ray.remote(ActorStateServer).remote(train_params['worker_num'])
     # create the actors
     actor_agents = []
     for i in range(train_params['worker_num']):
         actor_agents.append(DQNAgent(env_params, agent_params))
-    actor_monitor = ActorMonitor(train_params['worker_num'], ray.remote(num_cpus=1)(Actor), actor_agents, agent_params, env_params,
+    actor_monitor = ActorMonitor(train_params['worker_num'], ray.remote(Actor), actor_agents, agent_params, env_params,
                                  remote_param_server, remote_memory_server, remote_actor_state_server, 2)
 
     test_returns = []
@@ -132,5 +132,5 @@ if __name__ == '__main__':
             # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
         pbar.update()
-    np.save("./{}_parallel_returns.npy".format('per' if PER else 'normal'), test_returns)
+    np.save("./{}_lunar_parallel_returns.npy".format('per' if PER else 'normal'), test_returns)
     ray.wait(actor_monitor.actor_processes)
