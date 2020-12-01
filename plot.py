@@ -63,7 +63,7 @@ def plot_compared_learning_curve(data_list, win_size, plot_configs):
         ax.set_xlabel(plot_configs['x_label'], fontsize=plot_configs['font_size'])
         ax.set_ylabel(plot_configs['y_label'], fontsize=plot_configs['font_size'])
     ax.grid()
-    #     plt.savefig('./corl_results/camera-ready/' + plot_configs['title'] + '.png', dpi=100)
+    plt.savefig('./results/figures/' + plot_configs['title'] + '.png', dpi=100)
     plt.show()
 
 
@@ -77,11 +77,22 @@ def load_data(root_path, file_names):
 
 
 if __name__ == '__main__':
-    root_dir = './results/'
-    file_names = ['baseline_dqn_CartPole-v0.npy', 'baseline_dqn_per_CartPole-v0.npy'
+    root_dir = './results/returns/'
+    file_names = ['parallel_CartPole-v1_double_returns.npy', 'baseline_dqn_CartPole-v1_double.npy'
                   ]
 
     data_list = load_data(root_dir, file_names)
+
+    # get the min length
+    min_len = np.inf
+    for d in data_list:
+        if len(d) < min_len:
+            min_len = len(d)
+
+    # cut the data
+    for idx, d in enumerate(data_list):
+        if len(d) > min_len:
+            data_list[idx] = d[:min_len+1]
 
     plot_configs = {
         'width': 14,
@@ -89,12 +100,12 @@ if __name__ == '__main__':
         'x_label': 'episode',
         'y_label': 'discounted return',
         'font_size': 20,
-        'title': 'vanilla and double DQN: CartPole-v0',
+        'title': 'Comparison between single and distributed DQN: CartPole-v1',
         'color': ['tab:purple', 'tab:orange', 'tab:green'],
-        'legend': ['dqn', 'dqn-per', '4-workers'],
+        'legend': ['Ape-X DQN', 'Single DQN', '4-workers'],
         'legend_pos': 'lower right'
     }
 
-    win_size = 100
+    win_size = 10
 
     plot_compared_learning_curve(data_list, win_size, plot_configs)

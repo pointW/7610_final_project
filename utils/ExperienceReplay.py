@@ -59,7 +59,7 @@ class ReplayBuffer(object):
         return np.array(obs_list), np.array(actions_list), np.array(rewards_list), np.array(next_obs_list), np.array(
             dones_list)
 
-    def sample_batch(self, batch_size, beta):
+    def sample_batch(self, batch_size):
         # sample indices with replaced
         indices = [np.random.randint(0, len(self._storage)) for _ in range(batch_size)]
         return self._encode_sample(indices)

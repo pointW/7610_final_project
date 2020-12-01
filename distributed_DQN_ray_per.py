@@ -13,6 +13,10 @@ from distributed_per.memory_server_per import MemoryServer
 from distributed_per.param_server_per import ParamServer
 
 
+def save_results():
+    pass
+
+
 if __name__ == '__main__':
     ray.init()  # init the ray
 
