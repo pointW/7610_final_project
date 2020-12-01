@@ -63,9 +63,6 @@ class Actor(object):
         obs, rewards = self.env.reset(), []
         # start data collection until the training process terminates
         while self.current_train_step < self.total_train_steps:
-            # TODO: sleep to prevent learner never acquire data from buffer
-            #  because actor is always adding data.
-            time.sleep(0.01)
             # tell remote_actor_state_server i'm alive
             if time.time() - self.last_alive_report_time > self.report_alive_t:
                 self.send_alive()

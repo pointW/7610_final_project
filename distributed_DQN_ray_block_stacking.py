@@ -17,6 +17,7 @@ from distributed.block_stacking_memory_server_per import BlockStackingMemoryServ
 from utils.buffer import QLearningBuffer
 from distributed.actor_state_server import ActorStateServer
 from distributed.actor_monitor import ActorMonitor
+from utils.Schedule import LinearSchedule
 
 ExpertTransition = collections.namedtuple('ExpertTransition', 'state obs action reward next_state next_obs done step_left expert')
 
@@ -49,9 +50,9 @@ class BlockStackingParamServer(ParamServer):
 
 # @ray.remote(num_gpus=0.15)
 class BlockStackingLearner(Learner):
-    # def __init__(self, learn_params, env_params, param_server_remote, memory_server_remote):
-    #     super().__init__(learn_params, env_params, param_server_remote, memory_server_remote)
-    #     self.schedule = LinearSchedule(0.5, 0.01, self.epochs / 2)
+    def __init__(self, learn_params, env_params, param_server_remote, memory_server_remote):
+        super().__init__(learn_params, env_params, param_server_remote, memory_server_remote)
+        self.schedule = LinearSchedule(0.5, 0.01, self.epochs / 3)
 
     def eval_policy(self, episode):
         old_eps = self.agent.eps
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     # init the params
     env_config = {'simulator': 'pybullet', 'env': 'block_stacking', 'workspace': workspace, 'max_steps': 10,
                   'obs_size': heightmap_size, 'fast_mode': True, 'action_sequence': 'xyp', 'render': False,
-                  'num_objects': 4, 'random_orientation': False, 'reward_type': 'sparse', 'simulate_grasp': True,
+                  'num_objects': 3, 'random_orientation': False, 'reward_type': 'sparse', 'simulate_grasp': True,
                   'robot': 'kuka', 'workspace_check': 'point', 'in_hand_mode': 'raw', 'heightmap_resolution': heightmap_resolution}
 
     def env_fn():
@@ -104,7 +105,6 @@ if __name__ == '__main__':
     env_params = {
         'env_name': 'block_stacking',
         'max_episode_time_steps': 10,
-        'total_time_steps': 20000,
         'env_fn': env_fn
     }
 
@@ -123,10 +123,9 @@ if __name__ == '__main__':
         'memory_size': 100000,
         'batch_size': 32,
         'episode_time_steps': 10,
-        'epochs': 20000,
+        'epochs': 10000,
         'lr': 5e-5,
         'update_target_freq': 100,
-        'update_policy_freq': 10,
         'start_train_memory_size': 100,
         'syn_param_freq': 10,
         'worker_num': 5,
@@ -189,7 +188,7 @@ if __name__ == '__main__':
 
         if time.time() - t0 > (len(test_returns) + 1) * testing_freq:
             # if not np.mod(t, 200):
-            G = ray.get(remote_learner.eval_policy.remote(20))
+            G = ray.get(remote_learner.eval_policy.remote(100))
             test_returns.append(G)
 
         # print information
@@ -201,7 +200,7 @@ if __name__ == '__main__':
             # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
         pbar.update()
-    np.save("./parallel_returns.npy", test_returns)
+    np.save("./3s_per_parallel.npy", test_returns)
 
     ray.wait(actor_monitor.actor_processes)
 
