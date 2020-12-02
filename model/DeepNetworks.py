@@ -4,17 +4,20 @@ from torch import nn
 # class of deep neural network model
 class DeepQNet(nn.Module):
     # initialization
-    def __init__(self, obs_dim, act_dim):
+    def __init__(self, obs_dim, act_dim, output_activation=None):
         # inherit from nn module
         super(DeepQNet, self).__init__()
         # feed forward network
+        if output_activation is None:
+            output_activation = nn.Identity()
+
         self.fc_layer = nn.Sequential(
             nn.Linear(obs_dim, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, act_dim),
-            nn.Identity()
+            output_activation
         )
 
     # forward function
