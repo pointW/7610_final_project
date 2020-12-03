@@ -19,21 +19,21 @@ class ReplayBuffer(object):
         self.total_size = buffer_size
 
         # create a list to store the transitions
-        self._storage = []
+        self._data_buffer = []
         self._next_idx = 0
 
     def __len__(self):
-        return len(self._storage)
+        return len(self._data_buffer)
 
     def add(self, obs, act, reward, next_obs, done):
         # create a tuple
         trans = (obs, act, reward, next_obs, done)
 
         # interesting implementation
-        if self._next_idx >= len(self._storage):
-            self._storage.append(trans)
+        if self._next_idx >= len(self._data_buffer):
+            self._data_buffer.append(trans)
         else:
-            self._storage[self._next_idx] = trans
+            self._data_buffer[self._next_idx] = trans
 
         # increase the index
         self._next_idx = (self._next_idx + 1) % self.total_size
@@ -45,7 +45,7 @@ class ReplayBuffer(object):
         # collect the data
         for idx in indices:
             # get the single transition
-            data = self._storage[idx]
+            data = self._data_buffer[idx]
             obs, act, reward, next_obs, d = data
             # store to the list
             obs_list.append(np.array(obs, copy=False))
@@ -59,5 +59,5 @@ class ReplayBuffer(object):
 
     def sample_batch(self, batch_size):
         # sample indices with replaced
-        indices = [np.random.randint(0, len(self._storage)) for _ in range(batch_size)]
+        indices = [np.random.randint(0, len(self._data_buffer)) for _ in range(batch_size)]
         return self._encode_sample(indices)
