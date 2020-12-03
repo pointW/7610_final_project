@@ -39,6 +39,7 @@ class DQNAgent(object):
         # create behavior policy and target networks
         self.dqn_mode = agent_params['dqn_mode']
         self.use_obs = agent_params['use_obs']
+        self.gamma = agent_params['gamma']
         self.behavior_policy_net = DeepQNet(self.obs_dim, self.action_dim)
         self.target_policy_net = DeepQNet(self.obs_dim, self.action_dim)
 
@@ -136,7 +137,7 @@ class DQNAgent(object):
         obs_arr, action_arr, reward_arr, next_obs_arr, done_arr = batch_data
         # convert to tensors
         batch_data_tensor['obs'] = torch.tensor(obs_arr, dtype=torch.float32).to(self.device)
-        batch_data_tensor['action'] = torch.tensor(action_arr, dtype=torch.int).long().view(-1, 1).to(self.device)
+        batch_data_tensor['action'] = torch.tensor(action_arr).long().view(-1, 1).to(self.device)
         batch_data_tensor['reward'] = torch.tensor(reward_arr, dtype=torch.float32).view(-1, 1).to(self.device)
         batch_data_tensor['next_obs'] = torch.tensor(next_obs_arr, dtype=torch.float32).to(self.device)
         batch_data_tensor['done'] = torch.tensor(done_arr, dtype=torch.float32).view(-1, 1).to(self.device)

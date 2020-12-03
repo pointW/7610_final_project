@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy import stats
 
 
 def rolling_smooth(data, window_size, mode='mean'):
@@ -66,19 +67,58 @@ def plot_compared_learning_curve(data_list, win_size, plot_configs):
     #     plt.savefig('./corl_results/camera-ready/' + plot_configs['title'] + '.png', dpi=100)
     plt.show()
 
+def plot_compared_learning_curve_std_err(data_list, plot_configs):
+    curve_num = len(data_list)
+    fig, ax = plt.subplots(1, figsize=(plot_configs['width'], plot_configs['height']))
+    ax.set_title(plot_configs['title'], fontsize=plot_configs['font_size'])
+    for i in range(curve_num):
+        avg_rewards = np.mean(data_list[i], axis=1)
+        std_rewards = stats.sem(data_list[i], axis=1)
+        xs = np.arange(data_list[i].shape[0])
+        ax.fill_between(xs, avg_rewards-std_rewards, avg_rewards+std_rewards, alpha=0.2, color=plot_configs['color'][i])
+        ax.plot(xs, avg_rewards, label=plot_configs['legend'][i], color=plot_configs['color'][i], alpha=0.7)
+    ax.grid()
+    plt.show()
+
+    # smoothed_data = {'mean': [], 'var': []}
+    # for data in data_list:
+    #     d_mean, d_var = rolling_smooth(data, win_size, mode='mean-std')
+    #     smoothed_data['mean'].append(d_mean)
+    #     smoothed_data['var'].append(d_var)
+    #
+    # # set the settings
+    # curve_num = len(data_list)
+    # # plot the learning curves
+    # fig, ax = plt.subplots(1, figsize=(plot_configs['width'], plot_configs['height']))
+    # ax.set_title(plot_configs['title'], fontsize=plot_configs['font_size'])
+    # for i in range(curve_num):
+    #     mu = smoothed_data['mean'][i]
+    #     var = smoothed_data['var'][i]
+    #     t = np.arange(mu.shape[0])
+    #     ax.plot(t, mu, lw=2, label=plot_configs['legend'][i], color=plot_configs['color'][i])
+    #     ax.fill_between(t, mu + var, mu - var, lw=2, facecolor=plot_configs['color'][i], alpha=0.5)
+    #     ax.legend(loc=plot_configs['legend_pos'], fontsize=plot_configs['font_size'])
+    #     ax.set_xlabel(plot_configs['x_label'], fontsize=plot_configs['font_size'])
+    #     ax.set_ylabel(plot_configs['y_label'], fontsize=plot_configs['font_size'])
+    # ax.grid()
+    # #     plt.savefig('./corl_results/camera-ready/' + plot_configs['title'] + '.png', dpi=100)
+    # plt.show()
+
 
 def load_data(root_path, file_names):
     data_all = []
     for file in file_names:
         file = root_path + file
-        data = np.load(file, allow_pickle=True)
+        data = np.load(file, allow_pickle=True).mean(1)[:10]
         data_all.append(data)
     return data_all
 
 
 if __name__ == '__main__':
-    root_dir = './'
-    file_names = ['w1_returns.npy', 'w2_returns.npy'
+    root_dir = './results/3S_per/'
+    file_names = ['3s_per_10w_parallel.npy',
+                  '3s_per_parallel.npy',
+                  '3s_per_single.npy',
                   ]
 
     data_list = load_data(root_dir, file_names)
@@ -86,15 +126,16 @@ if __name__ == '__main__':
     plot_configs = {
         'width': 14,
         'height': 8,
-        'x_label': 'episode',
+        'x_label': 'time (x5min)',
         'y_label': 'discounted return',
         'font_size': 20,
-        'title': 'vanilla and double DQN: CartPole-v0',
+        'title': 'distributed and vanilla DQN: 3 block stacking',
         'color': ['tab:purple', 'tab:orange', 'tab:green'],
-        'legend': ['1-worker', '2-workers', '4-workers'],
-        'legend_pos': 'lower right'
+        'legend': ['distributed-10workers', 'distributed-5workers', 'vanilla', ],
+        'legend_pos': 'lower left'
     }
 
-    win_size = 50
+    win_size = 5
 
     plot_compared_learning_curve(data_list, win_size, plot_configs)
+    # plot_compared_learning_curve_std_err(data_list, plot_configs)
