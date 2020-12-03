@@ -4,12 +4,13 @@ import gym
 import tqdm
 import copy
 import time
+import torch
 
 # from agent.DQNAgent import DQNAgent
-from agent.DDPGAgent import DDPGAgent
+from agent.DDPGAgent import DDPGAgent, pend_action_scaling
 
-from distributed.actor import Actor
-from distributed.learner import Learner
+from distributed.actor import DDPG_Actor as Actor
+from distributed.learner import DDPG_Learner as Learner
 from distributed.memory_server import MemoryServer
 from distributed.param_server import ParamServer
 from distributed.actor_state_server import ActorStateServer
@@ -18,7 +19,7 @@ from distributed.actor_monitor import ActorMonitor
 if __name__ == '__main__':
     ray.init()  # init the ray
 
-    total_time_steps = 100000
+    # total_time_steps = 100000
 
     # init the params
     env_params = {
@@ -39,9 +40,10 @@ if __name__ == '__main__':
         'device': 'cpu',
         'lr': 1e-4,
         'gamma': 0.9995,
-        'use_soft_update': True,
+        'use_soft_update': False,
         'crash_prob': 0,
-        'report_alive_t': 0.1
+        'report_alive_t': 0.1,
+        'action_rescale_function':pend_action_scaling
     }
 
     # initialize parameters for training
@@ -52,7 +54,7 @@ if __name__ == '__main__':
         'batch_size': 128,
         'epochs': 50000,
         'lr': 1e-3,
-        'update_target_freq': 2000,
+        'update_target_freq': 1000,
         'update_policy_freq': 1,
         'eval_policy_freq': 100,
         'start_train_memory_size': 1000
@@ -85,6 +87,7 @@ if __name__ == '__main__':
                                  remote_param_server, remote_memory_server, remote_actor_state_server, 2)
 
     test_returns = []
+    test_times = []
     while ray.get(remote_memory_server.get_size.remote()) < train_params['start_train_memory_size']:
         actor_monitor.check_and_restart_actors()
         continue
@@ -109,6 +112,7 @@ if __name__ == '__main__':
         if time.time() - t0 > (len(test_returns) + 1) * testing_freq:
             G = np.average(ray.get(remote_learner.eval_policy.remote(10)))
             test_returns.append(G)
+            test_times.append(time.time())
 
         # print information
         pbar.set_description(
@@ -117,5 +121,9 @@ if __name__ == '__main__':
             # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
         pbar.update()
+
+    # torch.save(remote_learner.agent.behavior_policy_net.state_dict(), './most_recent_trained_model.params')
+    remote_learner.save_parameters.remote('./most_recent_trained_model.params')
     np.save("./parallel_returns.npy", test_returns)
+    # np.save("./training_data_{}.npy".format(time.time()), [test_returns,test_times,train_params,env_params,agent_params])
     ray.wait(actor_monitor.actor_processes)

@@ -2,24 +2,10 @@ import torch
 import gym
 import numpy as np
 from torch import nn
-from model.DeepNetworks import DeepQNet
+from model.DeepNetworks import Actor, Critic
 
-
-# # customized weight initialization
-# def customized_weights_init(m):
-#     # compute the gain
-#     gain = nn.init.calculate_gain('relu')
-#     # init the convolutional layer
-#     if isinstance(m, nn.Conv2d):
-#         # init the params using uniform
-#         nn.init.xavier_uniform_(m.weight, gain=gain)
-#         nn.init.constant_(m.bias, 0)
-#     # init the linear layer
-#     if isinstance(m, nn.Linear):
-#         # init the params using uniform
-#         nn.init.xavier_uniform_(m.weight, gain=gain)
-#         nn.init.constant_(m.bias, 0)
-
+def pend_action_scaling(a):
+    return a*2
 
 class DDPGAgent(object):
     # initialize the agent
@@ -42,11 +28,11 @@ class DDPGAgent(object):
         self.gamma = agent_params['gamma']
 
         #actor network = behavior netowrk
-        self.behavior_policy_net = DeepQNet(self.obs_dim, self.action_dim, output_activation = nn.Tanh())
-        self.target_policy_net = DeepQNet(self.obs_dim, self.action_dim, output_activation = nn.Tanh())
+        self.behavior_policy_net = Actor(self.obs_dim, self.action_dim, output_activation = nn.Tanh())
+        self.target_policy_net = Actor(self.obs_dim, self.action_dim, output_activation = nn.Tanh())
         #critic netowrk is seprate, but the actors do not need to have it for execution
-        self.critic_net = DeepQNet(self.obs_dim+self.action_dim, self.action_dim)
-        self.critic_target_net = DeepQNet(self.obs_dim+self.action_dim, self.action_dim)
+        self.critic_net = Critic(self.obs_dim+self.action_dim, self.action_dim)
+        self.critic_target_net = Critic(self.obs_dim+self.action_dim, self.action_dim)
 
         # initialize target networks with actor and critic network parameters
         self.target_policy_net.load_state_dict(self.behavior_policy_net.state_dict())
@@ -61,20 +47,22 @@ class DDPGAgent(object):
 
         # optimizer
         self.optimizer = torch.optim.Adam(self.behavior_policy_net.parameters(), lr=self.agent_params['lr'])
-        self.critic_optimizer = torch.optim.Adam(self.behavior_policy_net.parameters(), lr=self.agent_params['lr'])
+        self.critic_optimizer = torch.optim.Adam(self.critic_net.parameters(), lr=self.agent_params['lr'])
 
         # other parameters
         self.eps = 1
 
         #action randomness
-        self.action_std_div = 0.5
+        self.action_std_div = 0.75
+        self.action_scaling = pend_action_scaling
 
     # get action
     def get_action(self, obs):
         randomness = (0.0 if self.eps == 0.0 else self.action_std_div) #random behavior is constant except during test time
+        # print(randomness)
         obs = self._arr_to_tensor(obs).view(1, -1)
         with torch.no_grad():
-            action = [self.behavior_policy_net(obs).item() + np.random.normal(0.0,randomness)] #random perturbations for off policy learning
+            action = self.behavior_policy_net(obs) + np.random.normal(0.0,randomness) #random perturbations for off policy learning
         return action
 
     # update behavior policy
@@ -85,6 +73,7 @@ class DDPGAgent(object):
         # get the transition data
         obs_tensor = batch_data_tensor['obs']
         actions_tensor = batch_data_tensor['action']
+        # print(actions_tensor[0])
         next_obs_tensor = batch_data_tensor['next_obs']
         rewards_tensor = batch_data_tensor['reward']
         dones_tensor = batch_data_tensor['done']
@@ -95,21 +84,22 @@ class DDPGAgent(object):
 
         # compute the q value estimation using the behavior network
         # pred_q_value = self.behavior_policy_net(obs_tensor)
-        with torch.no_grad():
-            next_q_values = self.critic_target_net(torch.cat((next_obs_tensor,self.target_policy_net(next_obs_tensor)),1))
-            # pred_q_value = pred_q_value.gather(dim=1, index=actions_tensor)
-            target_q_values = rewards_tensor + self.agent_params['gamma']*(1-dones_tensor)*next_q_values
+        next_q_values = self.critic_target_net(torch.cat((next_obs_tensor,self.target_policy_net(next_obs_tensor).detach()),1))
+        # pred_q_value = pred_q_value.gather(dim=1, index=actions_tensor)
+        # with torch.no_grad():
+        target_q_values = rewards_tensor + self.agent_params['gamma']*(1.0-dones_tensor)*next_q_values
 
         #critic update
         self.critic_optimizer.zero_grad()
         q_batch = self.critic_net(torch.cat((obs_tensor,actions_tensor),1))
-        td_loss = torch.nn.functional.mse_loss(q_batch, target_q_values)
+        td_loss = torch.nn.functional.mse_loss(q_batch, target_q_values.detach())
         td_loss.backward()
         self.critic_optimizer.step()
 
         #actor update
         self.optimizer.zero_grad()
-        policy_loss = -self.critic_net(torch.cat((obs_tensor,self.behavior_policy_net(obs_tensor)),1)).mean()
+        policy_loss = -self.critic_net(torch.cat((obs_tensor,self.behavior_policy_net(obs_tensor)),1))
+        policy_loss = policy_loss.mean()
         policy_loss.backward()
         self.optimizer.step()
 
@@ -149,7 +139,7 @@ class DDPGAgent(object):
         obs_arr, action_arr, reward_arr, next_obs_arr, done_arr = batch_data
         # convert to tensors
         batch_data_tensor['obs'] = torch.tensor(obs_arr, dtype=torch.float32).to(self.device)
-        batch_data_tensor['action'] = torch.tensor(action_arr).long().view(-1, 1).to(self.device)
+        batch_data_tensor['action'] = torch.tensor(action_arr, dtype=torch.float32).view(-1, 1).to(self.device)
         batch_data_tensor['reward'] = torch.tensor(reward_arr, dtype=torch.float32).view(-1, 1).to(self.device)
         batch_data_tensor['next_obs'] = torch.tensor(next_obs_arr, dtype=torch.float32).to(self.device)
         batch_data_tensor['done'] = torch.tensor(done_arr, dtype=torch.float32).view(-1, 1).to(self.device)
@@ -173,7 +163,7 @@ class DDPGAgent(object):
                 # get greedy policy
                 action = self.get_action(obs)
                 # interaction
-                next_obs, reward, done, _ = env_test.step(action)
+                next_obs, reward, done, _ = env_test.step(self.action_scaling(action))
                 # save rewards
                 rewards.append(reward)
                 # check termination

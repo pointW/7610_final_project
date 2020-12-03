@@ -1,6 +1,6 @@
 import ray
 from utils.Schedule import LinearSchedule
-
+import torch
 
 class Learner(object):
     def __init__(self, learn_params, env_params, param_server_remote, memory_server_remote):
@@ -71,3 +71,37 @@ class Learner(object):
 
     def update_target(self):
         self.agent.update_target_policy()
+
+
+
+class DDPG_Learner(Learner):
+    def eval_policy(self, episode):
+        old_eps = self.agent.eps
+        returns = []
+        self.agent.eps = 0
+        for _ in range(episode):
+            rewards = []
+            obs = self.test_env.reset()
+            for t in range(self.env_params['max_episode_time_steps']):
+                action = self.agent.get_action(obs)
+                try:
+                    next_obs, reward, done, _ = self.test_env.step(self.agent.action_scaling(action))
+                except:
+                    next_obs, reward, done, _ = self.test_env.step(action)
+                rewards.append(reward)
+                if done:
+                    break
+                else:
+                    obs = next_obs
+
+            # compute returns
+            G = 0
+            for r in reversed(rewards):
+                G = r + self.agent.gamma * G
+            returns.append(G)
+
+        self.agent.eps = old_eps
+        return returns
+
+    def save_parameters(self,path):
+        torch.save(self.agent.behavior_policy_net.state_dict(), path)
