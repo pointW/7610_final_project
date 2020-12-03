@@ -109,15 +109,16 @@ def load_data(root_path, file_names):
     data_all = []
     for file in file_names:
         file = root_path + file
-        data = np.load(file, allow_pickle=True).mean(1)[:32]
+        data = np.load(file, allow_pickle=True).mean(1)[:10]
         data_all.append(data)
     return data_all
 
 
 if __name__ == '__main__':
-    root_dir = './results/3H1_per/'
-    file_names = ['3h1_per_parallel.npy',
-                  '3h1_per_single.npy'
+    root_dir = './results/3S_per/'
+    file_names = ['3s_per_10w_parallel.npy',
+                  '3s_per_parallel.npy',
+                  '3s_per_single.npy',
                   ]
 
     data_list = load_data(root_dir, file_names)
@@ -128,13 +129,13 @@ if __name__ == '__main__':
         'x_label': 'time (x5min)',
         'y_label': 'discounted return',
         'font_size': 20,
-        'title': 'distributed and vanilla DQN: house building',
+        'title': 'distributed and vanilla DQN: 3 block stacking',
         'color': ['tab:purple', 'tab:orange', 'tab:green'],
-        'legend': ['distributed', 'vanilla', '4-workers'],
-        'legend_pos': 'lower right'
+        'legend': ['distributed-10workers', 'distributed-5workers', 'vanilla', ],
+        'legend_pos': 'lower left'
     }
 
-    win_size = 2
+    win_size = 5
 
     plot_compared_learning_curve(data_list, win_size, plot_configs)
     # plot_compared_learning_curve_std_err(data_list, plot_configs)

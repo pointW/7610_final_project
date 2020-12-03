@@ -113,7 +113,7 @@ if __name__ == '__main__':
         'device': 'cuda',
         'lr': 5e-5,
         'gamma': 0.9,
-        'crash_prob': 0,
+        'crash_prob': 0.001,
         'report_alive_t': 0.1
     }
 
@@ -123,7 +123,7 @@ if __name__ == '__main__':
         'memory_size': 100000,
         'batch_size': 32,
         'episode_time_steps': 10,
-        'epochs': 10000,
+        'epochs': 5000,
         'lr': 5e-5,
         'update_target_freq': 100,
         'start_train_memory_size': 100,
@@ -161,7 +161,7 @@ if __name__ == '__main__':
         actor_agents.append(DQNBlock(workspace, heightmap_resolution, agent_params['device'], agent_params['lr'],
                                      agent_params['gamma']))
     actor_monitor = ActorMonitor(train_params['worker_num'], BlockStackingActor, actor_agents, agent_params, env_params,
-                                 remote_param_server, remote_memory_server, remote_actor_state_server)
+                                 remote_param_server, remote_memory_server, remote_actor_state_server, actor_restart_t=5)
 
     test_returns = []
     losses = []
@@ -200,7 +200,9 @@ if __name__ == '__main__':
             # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
         )
         pbar.update()
-    np.save("./3s_per_parallel.npy", test_returns)
+    np.save("./3s_per_10w_parallel.npy", test_returns)
+    agent.fcn.load_state_dict(ray.get(remote_param_server.get_latest_model_params.remote()))
+    agent.saveModel('./model')
 
     ray.wait(actor_monitor.actor_processes)
 
