@@ -98,3 +98,47 @@ class Actor(object):
 
         print(f"Actor {self.id} terminates.")
 
+class DDPG_Actor(Actor):
+    def run(self):
+        # synchronize the parameters
+        self.update_behavior_policy()
+        # initialize the environment
+        obs, rewards = self.env.reset(), []
+        # start data collection until the training process terminates
+        while self.current_train_step < self.total_train_steps:
+            # tell remote_actor_state_server i'm alive
+            if time.time() - self.last_alive_report_time > self.report_alive_t:
+                self.send_alive()
+            # crash with self.crash_prob to simulate actor crash
+            if np.random.random() < self.crash_prob:
+                print('Actor {}: simulating crash'.format(self.id))
+                exit()
+            # compute the epsilon
+            self.agent.eps = self.scheduled_eps
+            # get the action
+            action = self.agent.get_action(obs)
+            # interaction with the environment
+            try:
+                next_obs, reward, done, _ = self.env.step(self.agent.action_scaling(action))
+            except:
+                next_obs, reward, done, _ = self.env.step(action)
+            # record rewards
+            rewards.append(reward)
+            # add the local buffer
+            self.local_buffer.append((obs, action, reward, next_obs, done))
+            # check termination
+            if done:
+                # G = 0
+                # for r in reversed(rewards):
+                #     G = r + 0.9995 * G
+                # print(f"Actor {self.id}: G = {G}, Eps = {self.scheduled_eps}")
+                # reset environment
+                obs, rewards = self.env.reset(), []
+                # synchronize the behavior policy
+                self.update_behavior_policy()
+                # send data to remote memory buffer
+                self.send_data()
+            else:
+                obs = next_obs
+
+        print(f"Actor {self.id} terminates.")

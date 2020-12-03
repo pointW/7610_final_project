@@ -5,7 +5,7 @@ This repo contains the code of implementing the distributed reinforcement learni
 This is the final project of the course (CS 7610): Foundation of Distributed System.
 
 ## 2. Prerequisites
-In order to run the demo on your computer, we recommend you using the Anaconda virtual environment. Please make sure 
+In order to run the demo on your computer, we recommend you using the Anaconda virtual environment. Please make sure
 you have already installed Anaconda.
 
 ### 2.1 Create the a virtual environment using Anaconda
@@ -29,11 +29,15 @@ You have to install the following dependencies to run the demo
 6. numpy: conda install numpy
 ```
 
-## 3. Run a distributed DQN demo on gym CartPole-v0 
+## 3. Run a distributed DQN demo on gym CartPole-v0
 Now, you are ready to run a demo of our implementation on CartPole-v0. In the activated conda environment, run the
 following command:
 
 ``python distributed_DQN_ray.py``
+
+## 4. Run a distributed DDPG demo on the gym Pendulum-v0 Env.
+``python distributed_DDPG_ray.py``
+Note, the default settings require at least 6 CPU cores.
 
 ## Reference
 1. [Distributed Prioritized Experience Replay](https://arxiv.org/abs/1803.00933)
@@ -42,4 +46,3 @@ following command:
 4. [Ray](https://docs.ray.io/en/master/index.html)
 5. [Pytorch](https://pytorch.org/)
 6. [OpenAI Gym](https://gym.openai.com/)
-
