@@ -67,6 +67,7 @@ def plot_compared_learning_curve(data_list, win_size, plot_configs):
     #     plt.savefig('./corl_results/camera-ready/' + plot_configs['title'] + '.png', dpi=100)
     plt.show()
 
+
 def plot_compared_learning_curve_std_err(data_list, plot_configs):
     curve_num = len(data_list)
     fig, ax = plt.subplots(1, figsize=(plot_configs['width'], plot_configs['height']))

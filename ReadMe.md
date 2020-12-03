@@ -34,3 +34,12 @@ Now, you are ready to run a demo of our implementation on CartPole-v0. In the ac
 following command:
 
 ``python distributed_DQN_ray.py``
+
+## Reference
+1. [Distributed Prioritized Experience Replay](https://arxiv.org/abs/1803.00933)
+2. [Human-level control through deep reinforcement learning](https://www.nature.com/articles/nature14236)
+3. [Continuous control with deep reinforcement learning](https://arxiv.org/abs/1509.02971)
+4. [Ray](https://docs.ray.io/en/master/index.html)
+5. [Pytorch](https://pytorch.org/)
+6. [OpenAI Gym](https://gym.openai.com/)
+
