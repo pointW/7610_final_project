@@ -37,7 +37,13 @@ following command:
 
 ## 4. Run a distributed DDPG demo on the gym Pendulum-v0 Env.
 ``python distributed_DDPG_ray.py``
+
 Note, the default settings require at least 6 CPU cores.
+
+## 5. Viewing Training Results
+The saved performance plot from the most recent training run can be viewed using:
+
+``python plot.py``
 
 ## Reference
 1. [Distributed Prioritized Experience Replay](https://arxiv.org/abs/1803.00933)
