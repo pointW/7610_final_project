@@ -1,13 +1,14 @@
 import torch
 from agent.block_stacking.dqn_2d import DQN2D
-from network.models import ResUCatShared
+from network.models import ResUCatShared96
 
 
 class DQNBlock(DQN2D):
     def __init__(self, workspace, heightmap_resolution, device, lr=1e-4, gamma=0.9, sl=False, num_primitives=1,
                  patch_size=24):
         super().__init__(workspace, heightmap_resolution, device, lr, gamma, sl, num_primitives, patch_size)
-        fcn = ResUCatShared(1, 2, domain_shape=(1, 128, 128), patch_shape=(1, 24, 24)).to(device)
+        fcn = ResUCatShared96(1, 2, domain_shape=(1, 96, 96), patch_shape=(1, 24, 24)).to(device)
+        self.padding = 96
         self.initNetwork(fcn)
         self.eps = 1
         self.behavior_policy_net = self.fcn
