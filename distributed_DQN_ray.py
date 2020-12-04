@@ -4,6 +4,9 @@ import gym
 import tqdm
 import copy
 import time
+import argparse
+import os
+import torch
 
 from agent.DQNAgent import DQNAgent
 
@@ -14,17 +17,31 @@ from distributed.param_server import ParamServer
 from distributed.actor_state_server import ActorStateServer
 from distributed.actor_monitor import ActorMonitor
 
+
+def parse_input():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", type=str, default="CartPole-v0")
+    parser.add_argument("--worker_num", type=int, default=1)
+    parser.add_argument("--crash_prob", type=float, default=0)
+
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
     ray.init()  # init the ray
 
-    total_time_steps = 100000
+    # parse the input
+    input_args = parse_input()
+
+    # init env
+    init_env = gym.make(input_args.env)
 
     # init the params
     env_params = {
-        'env_name': 'CartPole-v0',
-        'max_episode_time_steps': 200,
-        'act_num': 2,
-        'obs_dim': 4,
+        'env_name': input_args.env,
+        'max_episode_time_steps': 500,
+        'act_num': init_env.action_space.n,
+        'obs_dim': init_env.observation_space.shape[0],
         'run_eval_num': 10
     }
 
@@ -32,25 +49,25 @@ if __name__ == '__main__':
     agent_params = {
         'agent_id': None,
         'agent_model': None,
-        'dqn_mode': 'vanilla',
+        'dqn_mode': 'double',
         'use_obs': False,
         'polyak': 0.95,
         'device': 'cpu',
         'lr': 1e-4,
         'gamma': 0.9995,
         'use_soft_update': False,
-        'crash_prob': 0,
+        'crash_prob': input_args.crash_prob,
         'report_alive_t': 0.1
     }
 
     # initialize parameters for training
     train_params = {
         'agent': None,
-        'worker_num': 2,
+        'worker_num': input_args.worker_num,
         'memory_size': 50000,
-        'batch_size': 128,
-        'epochs': 50000,
-        'lr': 1e-3,
+        'batch_size': 32,
+        'epochs': 10000,
+        'lr': 1e-4,
         'update_target_freq': 2000,
         'update_policy_freq': 1,
         'eval_policy_freq': 100,
@@ -112,9 +129,27 @@ if __name__ == '__main__':
         # print information
         pbar.set_description(
             f'Step: {t} |'
-            f'G: {np.mean(test_returns[-5:]) if test_returns else 0:.2f} | '
-            # f'Buffer: {ray.get(self.remote_memory_server.get_size.remote())}'
+            f'Return: {np.mean(test_returns[-5:]) if test_returns else 0:.2f} | '
         )
         pbar.update()
-    np.save("./parallel_returns.npy", test_returns)
+
+    # create directories to save data
+    model_dir = './results/models/'
+    return_dir = './results/returns/'
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+    if not os.path.exists(return_dir):
+        os.makedirs(return_dir)
+
+    # save the model and the returns
+    model_name = '_'.join([
+        model_dir + 'parallel',
+        input_args.env,
+        'model.pt'
+    ])
+    returns_name = '_'.join([return_dir + 'parallel',
+                             input_args.env,
+                             'returns.npy'])
+    np.save(returns_name, test_returns)
+    torch.save(ray.get(remote_param_server.get_latest_model_params.remote()), model_name)
     ray.wait(actor_monitor.actor_processes)

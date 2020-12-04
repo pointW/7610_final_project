@@ -29,11 +29,22 @@ You have to install the following dependencies to run the demo
 6. numpy: conda install numpy
 ```
 
-## 3. Run a distributed DQN demo on gym CartPole-v0
-Now, you are ready to run a demo of our implementation on CartPole-v0. In the activated conda environment, run the
-following command:
+## 3. Run a distributed DQN demo on gym
+Now, you are ready to run a demo of our implementation. In the activated conda environment, run the
+following command: (Here we use CartPole-v0 as an example. --env=domain name, --worker_num=number of actors)
 
-``python distributed_DQN_ray.py``
+``python distributed_DQN_ray.py --env=CartPole-v0 --worker_num=2``
+
+To plot the learning curve of the trained environment, please run:
+
+``python plot_DQN_learning_curve.py --env=CartPole-v0``
+
+To visualize the policy, please run:
+
+``python visualize_DQN_policy.py --env=CartPole-v0``
+
+Please note, you can try 3 different domains: CartPole-v0, CartPole-v1, and LundaLander-v2
+
 
 ## 4. Run a distributed DDPG demo on the gym Pendulum-v0 Env.
 ``python distributed_DDPG_ray.py``
